@@ -1,0 +1,15 @@
+*.obj
+*.exe
+*.dll
+*.pdb
+*.aps
+*.pch
+*.ncb
+*.suo
+*.sdf
+*.user
+*.opensdf
+/Debug
+/Release
+/wkReSolution/Release
+/wkReSolution/Debug

@@ -1,0 +1,37 @@
+
+#define APSTUDIO_READONLY_SYMBOLS
+
+#include "winres.h"
+
+#undef APSTUDIO_READONLY_SYMBOLS
+
+LANGUAGE LANG_NEUTRAL, SUBLANG_DEFAULT
+#pragma code_page(1252)
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION 0,1,7,0
+ PRODUCTVERSION 0,1,7,0
+ FILEFLAGSMASK 0x17L
+#ifdef _DEBUG
+ FILEFLAGS 0x1L
+#else
+ FILEFLAGS 0x0L
+#endif
+ FILEOS 0x4L
+ FILETYPE 0x0L
+ FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "041904b0"
+        BEGIN
+            VALUE "FileDescription", "Allows to change screen resolution to any value in Worms 2."
+            VALUE "FileVersion", "0.1.7.0"
+            VALUE "InternalName", "wkReSolution"
+            VALUE "LegalCopyright", "(C) StepS"
+            VALUE "OriginalFilename", "wkReSolution.dll"
+            VALUE "ProductName", "ReSolution"
+            VALUE "ProductVersion", "0.1.7.0"
+        END
+    END
+END
