@@ -18,32 +18,6 @@ DWORD LeftOffset, CenterCursorX, CenterCursorY;
 DWORD AL_WUnk2, AL_HorizontalSidesBox, AL_RenderFromLeft, AL_RenderFromTop, AL_TopInfidelBox, AL_SWUnk1, AL_LeftOffset;
 DWORD TopOffset;
 
-LRESULT __declspec(dllexport)__stdcall  CALLBACK CallWndProc(int nCode, WPARAM wParam, LPARAM lParam)
-{
-	if (nCode == HC_ACTION)
-	{
-		CWPSTRUCT* pwp = (CWPSTRUCT*)lParam;
-
-		if (pwp->message == WM_EXITSIZEMOVE)
-		{
-			if (HWND W2Wnd = FindWindow("Worms2", NULL))
-			{
-				if (pwp->hwnd == W2Wnd)
-				{
-					RECT W2rect;
-					GetClientRect(W2Wnd, &W2rect);
-					ClientToScreen(W2Wnd, (POINT*)&W2rect);
-					SHORT width = (SHORT)(W2rect.right - W2rect.left);
-					SHORT height = (SHORT)(W2rect.bottom - W2rect.top);
-					PatchMem(width, height);
-				}
-			}
-		}
-	}
-
-	return CallNextHookEx(wHook, nCode, wParam, lParam);
-}
-
 DWORD GetPETimestamp(LPCTSTR lpModuleName)
 {
 	DWORD ImageBase = (DWORD)GetModuleHandle(lpModuleName);
@@ -215,6 +189,32 @@ void LoadConfig()
 		GlobalEatLimit = 854;
 	else
 		GlobalEatLimit = 480;
+}
+
+LRESULT __declspec(dllexport)__stdcall  CALLBACK CallWndProc(int nCode, WPARAM wParam, LPARAM lParam)
+{
+	if (nCode == HC_ACTION)
+	{
+		CWPSTRUCT* pwp = (CWPSTRUCT*)lParam;
+
+		if (pwp->message == WM_EXITSIZEMOVE)
+		{
+			if (HWND W2Wnd = FindWindow("Worms2", NULL))
+			{
+				if (pwp->hwnd == W2Wnd)
+				{
+					RECT W2rect;
+					GetClientRect(W2Wnd, &W2rect);
+					ClientToScreen(W2Wnd, (POINT*)&W2rect);
+					SHORT width = (SHORT)(W2rect.right - W2rect.left);
+					SHORT height = (SHORT)(W2rect.bottom - W2rect.top);
+					PatchMem(width, height);
+				}
+			}
+		}
+	}
+
+	return CallNextHookEx(wHook, nCode, wParam, lParam);
 }
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved)
