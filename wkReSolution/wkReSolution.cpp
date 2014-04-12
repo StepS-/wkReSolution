@@ -205,7 +205,6 @@ LRESULT __declspec(dllexport)__stdcall  CALLBACK CallWndProc(int nCode, WPARAM w
 				{
 					RECT W2rect;
 					GetClientRect(W2Wnd, &W2rect);
-					ClientToScreen(W2Wnd, (POINT*)&W2rect);
 					SHORT width = (SHORT)(W2rect.right - W2rect.left);
 					SHORT height = (SHORT)(W2rect.bottom - W2rect.top);
 					PatchMem(width, height);
