@@ -4,8 +4,8 @@
 #undef APSTUDIO_READONLY_SYMBOLS
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 0,1,7,0
- PRODUCTVERSION 0,1,7,0
+ FILEVERSION 0,1,7,1
+ PRODUCTVERSION 0,1,7,1
  FILEOS 0x4L
  FILETYPE 0x2L
 BEGIN
@@ -15,12 +15,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "StepS"
             VALUE "FileDescription", "Allows to change screen resolution to any value in Worms 2."
-            VALUE "FileVersion", "0.1.7.0"
-            VALUE "InternalName", "wkReSolution"
+            VALUE "FileVersion", "0.1.7.1"
+            VALUE "InternalName", "wkReSolutionRT"
             VALUE "LegalCopyright", "(C) 2014, StepS"
             VALUE "OriginalFilename", "wkReSolution.dll"
             VALUE "ProductName", "ReSolution"
-            VALUE "ProductVersion", "0.1.7.0"
+            VALUE "ProductVersion", "0.1.7.1"
         END
     END
     BLOCK "VarFileInfo"
