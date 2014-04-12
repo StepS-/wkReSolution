@@ -58,18 +58,12 @@ BOOL CavernCheck()
 	FILE* land;
 	char cavc;
 	Cavern = false;
-	TargetWidth = SWidth > 6012 ? 6012 : SWidth;
-	TargetHeight = SHeight > 2902 ? 2902 : SHeight;
 	if (fopen_s(&land, GetPathUnderExeA(LandFile, "Data\\land.dat"), "r") == ERROR_SUCCESS)
 	{
 		fseek(land, 0x10, SEEK_SET);
 		cavc = fgetc(land);
 		if (cavc)
-		{
 			Cavern = true;
-			TargetWidth = SWidth > 1920 ? 1920 : SWidth;
-			TargetHeight = SHeight > 856 ? 856 : SHeight;
-		}
 		fclose(land);
 	}
 	else
@@ -79,6 +73,20 @@ BOOL CavernCheck()
 		MB_OK | MB_ICONWARNING);
 
 	return Cavern;
+}
+
+void GetTargetScreenSize(SHORT nWidth, SHORT nHeight)
+{
+	if (Cavern)
+	{
+		TargetWidth = nWidth > 1920 ? 1920 : nWidth;
+		TargetHeight = nHeight > 856 ? 856 : nHeight;
+	}
+	else
+	{
+		TargetWidth = nWidth > 6012 ? 6012 : nWidth;
+		TargetHeight = nHeight > 2902 ? 2902 : nHeight;
+	}
 }
 
 void GetAddresses()
@@ -120,8 +128,10 @@ void UnprotectAddresses()
 	Unprotect(TopOffset);
 }
 
-void PatchMem()
+void PatchMem(SHORT nWidth, SHORT nHeight)
 {
+	GetTargetScreenSize(nWidth, nHeight);
+
 	*(WORD*)LandWaterCriticalZone = GlobalEatLimit;
 	*(WORD*)CavernWaterEatLimit = GlobalEatLimit;
 	*(WORD*)ActualWidth = SWidth;
@@ -196,7 +206,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReser
 		CavernCheck();
 		GetAddresses();
 		UnprotectAddresses();
-		PatchMem();
+		PatchMem(SWidth, SHeight);
 	}
 
 	return 1;
