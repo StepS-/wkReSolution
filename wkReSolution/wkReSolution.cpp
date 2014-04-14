@@ -3,6 +3,7 @@
 
 #include <windows.h>
 #include <stdio.h>
+#include <ddraw.h>
 #include "madCHook.h"
 #pragma comment (lib, "madCHook.lib")
 
@@ -10,6 +11,7 @@ bool Cavern;
 BYTE Version;
 CHAR Config[MAX_PATH], LandFile[MAX_PATH];
 HHOOK wHook;
+LPDIRECTDRAW DDObj;
 
 SHORT SWidth, SHeight, GlobalEatLimit, TargetWidth, TargetHeight;
 SHORT ScreenX, ScreenY;
@@ -218,6 +220,15 @@ LRESULT __declspec(dllexport)__stdcall  CALLBACK CallWndProc(int nCode, WPARAM w
 	return CallNextHookEx(wHook, nCode, wParam, lParam);
 }
 
+HRESULT(WINAPI *DirectDrawCreateNext)(GUID FAR *lpGUID, LPDIRECTDRAW FAR *lplpDD, IUnknown FAR *pUnkOuter);
+
+HRESULT WINAPI DirectDrawCreateNew(GUID FAR *lpGUID, LPDIRECTDRAW FAR *lplpDD, IUnknown FAR *pUnkOuter)
+{
+	HRESULT result = DirectDrawCreateNext(lpGUID, lplpDD, pUnkOuter);
+	if (result == DD_OK) DDObj = (LPDIRECTDRAW)(*lplpDD);
+	return result;
+}
+
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved)
 {
 	if (ul_reason_for_call == DLL_PROCESS_ATTACH)
@@ -237,6 +248,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReser
 		PatchMem(SWidth, SHeight);
 
 		wHook = SetWindowsHookEx(WH_CALLWNDPROC, (HOOKPROC)CallWndProc, hModule, GetCurrentThreadId());
+		HookAPI("ddraw.dll", "DirectDrawCreate", DirectDrawCreateNew, (PVOID*)&DirectDrawCreateNext, 0);
 	}
 	else if (ul_reason_for_call == DLL_PROCESS_DETACH)
 	{
