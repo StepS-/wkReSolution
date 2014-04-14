@@ -3,6 +3,8 @@
 
 #include <windows.h>
 #include <stdio.h>
+#include "madCHook.h"
+#pragma comment (lib, "madCHook.lib")
 
 bool Cavern;
 BYTE Version;
