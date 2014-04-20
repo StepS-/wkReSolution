@@ -13,6 +13,11 @@ CHAR Config[MAX_PATH], LandFile[MAX_PATH];
 HHOOK wHook;
 LPDIRECTDRAW DDObj;
 LPDIRECTDRAWSURFACE GDISurf;
+PVOID W2DDHookStart = (PVOID)0x433E99;
+PVOID W2DDContinue = (PVOID)0x433E9F;
+PVOID W2DDInit = (PVOID)0x40B280;
+PVOID W2DDHookNext;
+PVOID W2DDSizeStruct;
 
 SHORT SWidth, SHeight, TWidth, THeight, LastWidth, LastHeight, GlobalEatLimit, TargetWidth, TargetHeight;
 SHORT ScreenX, ScreenY;
@@ -203,6 +208,34 @@ void LoadConfig()
 		GlobalEatLimit = 480;
 }
 
+__declspec(naked) void EndMadHook()
+{
+	__asm
+	{
+		push eax
+		push ebx
+		mov eax, [esp + 0Ch]
+		mov ebx, [eax + 1]
+		mov[esp + 0Ch], ebx
+		lock and dword ptr[eax + 1], 0
+		pop ebx
+		pop eax
+		ret
+	}
+}
+
+__declspec(naked) void W2DDInitHook()
+{
+	__asm
+	{
+		call EndMadHook
+		push eax
+		call W2DDInit
+		mov dword ptr ds:[W2DDSizeStruct], eax
+		jmp W2DDContinue
+	}
+}
+
 //HACK
 HRESULT WINAPI EnumResize(LPDIRECTDRAWSURFACE pSurface, LPDDSURFACEDESC lpSurfaceDesc, LPVOID lpContext)
 {
@@ -267,16 +300,21 @@ LRESULT __declspec(dllexport)__stdcall CALLBACK CallWndProc(int nCode, WPARAM wP
 			{
 				if (pwp->hwnd == W2Wnd)
 				{
-					RECT W2rect;
-					GetClientRect(W2Wnd, &W2rect);
-					SHORT width = (SHORT)(W2rect.right - W2rect.left);
-					SHORT height = (SHORT)(W2rect.bottom - W2rect.top);
-					TWidth = width;
-					THeight = height;
-					PatchMem(width, height);
 					if (DDObj)
 					if (!FAILED(DDObj->GetGDISurface(&GDISurf)))
 					{
+						RECT W2rect;
+						GetClientRect(W2Wnd, &W2rect);
+						SHORT width = (SHORT)(W2rect.right - W2rect.left);
+						SHORT height = (SHORT)(W2rect.bottom - W2rect.top);
+						TWidth = width;
+						THeight = height;
+						PatchMem(TWidth, THeight);
+						if (W2DDSizeStruct)
+						{
+							*(PDWORD)((DWORD)W2DDSizeStruct + sizeof(LONG) * 2) = TWidth;
+							*(PDWORD)((DWORD)W2DDSizeStruct + sizeof(LONG) * 3) = THeight;
+						}
 						if (!FAILED(DDObj->EnumSurfaces(DDENUMSURFACES_DOESEXIST | DDENUMSURFACES_ALL, NULL, GDISurf, EnumResize)))
 						{
 							LastWidth = width;
@@ -322,6 +360,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReser
 		wHook = SetWindowsHookEx(WH_CALLWNDPROC, (HOOKPROC)CallWndProc, hModule, GetCurrentThreadId());
 
 		HookAPI("ddraw.dll", "DirectDrawCreate", DirectDrawCreateHook, (PVOID*)&DirectDrawCreateNext, 0);
+		HookCode(W2DDHookStart, W2DDInitHook, (PVOID*)&W2DDHookNext, 0);
 	}
 	else if (ul_reason_for_call == DLL_PROCESS_DETACH)
 	{
