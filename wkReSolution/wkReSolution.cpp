@@ -12,8 +12,9 @@ BYTE Version;
 CHAR Config[MAX_PATH], LandFile[MAX_PATH];
 HHOOK wHook;
 LPDIRECTDRAW DDObj;
+LPDIRECTDRAWSURFACE GDISurf;
 
-SHORT SWidth, SHeight, GlobalEatLimit, TargetWidth, TargetHeight;
+SHORT SWidth, SHeight, TWidth, THeight, LastWidth, LastHeight, GlobalEatLimit, TargetWidth, TargetHeight;
 SHORT ScreenX, ScreenY;
 DWORD OfflineCavernFloodFix;
 DWORD ActualWidth, HorizontalSidesBox, RenderFromLeft;
@@ -22,16 +23,18 @@ DWORD LeftOffset, CenterCursorX, CenterCursorY;
 DWORD AL_WUnk2, AL_HorizontalSidesBox, AL_RenderFromLeft, AL_RenderFromTop, AL_TopInfidelBox, AL_SWUnk1, AL_LeftOffset;
 DWORD TopOffset;
 
-DWORD GetPETimestamp(LPCTSTR lpModuleName)
+#define RoundUp(num, mod) (num + (mod * ((num % mod) != 0) - (num % mod)))
+
+DWORD GetPETimestampA(LPCSTR lpModuleName)
 {
-	DWORD ImageBase = (DWORD)GetModuleHandle(lpModuleName);
+	DWORD ImageBase = (DWORD)GetModuleHandleA(lpModuleName);
 	DWORD PEOffset = *(DWORD*)(ImageBase + 0x3C);
 	return *(DWORD*)(ImageBase + PEOffset + 0x08);
 }
 
 BYTE CheckVersion()
 {
-	DWORD PETime = GetPETimestamp(0);
+	DWORD PETime = GetPETimestampA(0);
 	if (PETime >= 0x352118A5 && PETime <= 0x352118FD)
 		return Version = 1;
 	return Version = 0;
@@ -139,8 +142,8 @@ void PatchMem(SHORT nWidth, SHORT nHeight)
 
 	*(WORD*)LandWaterCriticalZone = GlobalEatLimit;
 	*(WORD*)CavernWaterEatLimit = GlobalEatLimit;
-	*(WORD*)ActualWidth = SWidth;
-	*(WORD*)ActualHeight = SHeight;
+	*(WORD*)ActualWidth = nWidth;
+	*(WORD*)ActualHeight = nHeight;
 	*(WORD*)RenderFromLeft = TargetWidth;
 	*(WORD*)RenderFromTop = TargetHeight;
 	*(WORD*)HorizontalSidesBox = TargetWidth;
@@ -148,19 +151,19 @@ void PatchMem(SHORT nWidth, SHORT nHeight)
 	*(WORD*)LeftOffset = TargetWidth / 2;
 	*(WORD*)TopOffset = TargetHeight / 2;
 
-	*(WORD*)CenterCursorX = SWidth / 2 > ScreenX / 2 ? ScreenX / 2 : SWidth / 2;
-	*(WORD*)CenterCursorY = SHeight / 2 > ScreenY / 2 ? ScreenY / 2 : SHeight / 2;
+	*(WORD*)CenterCursorX = nWidth / 2 > ScreenX / 2 ? ScreenX / 2 : nWidth / 2;
+	*(WORD*)CenterCursorY = nHeight / 2 > ScreenY / 2 ? ScreenY / 2 : nHeight / 2;
 
-	*(WORD*)AL_WUnk2 = SWidth;
+	*(WORD*)AL_WUnk2 = nWidth;
 	*(WORD*)AL_HorizontalSidesBox = TargetWidth;
 	*(WORD*)AL_RenderFromLeft = TargetWidth;
 	*(WORD*)AL_TopInfidelBox = TargetHeight;
-	*(WORD*)AL_RenderFromTop = SHeight;
+	*(WORD*)AL_RenderFromTop = nHeight;
 	*(WORD*)AL_SWUnk1 = TargetWidth / 2;
 	*(WORD*)AL_LeftOffset = TargetWidth / 2;
 
-	//  *(WORD*)HUnk4 = SHeight;
-	//  *(WORD*)HUnk5 = SHeight;
+	//  *(WORD*)HUnk4 = nHeight;
+	//  *(WORD*)HUnk5 = nHeight;
 	//  unknown, readonly values
 }
 
@@ -189,13 +192,70 @@ void LoadConfig()
 		WritePrivateProfileIntA("Resolution", "ScreenHeight", SHeight, Config);
 	}
 
+	LastWidth = SWidth;
+	LastHeight = SHeight;
+	TWidth = SWidth;
+	THeight = SHeight;
+
 	if (OfflineCavernFloodFix)
 		GlobalEatLimit = 854;
 	else
 		GlobalEatLimit = 480;
 }
 
-LRESULT __declspec(dllexport)__stdcall  CALLBACK CallWndProc(int nCode, WPARAM wParam, LPARAM lParam)
+//HACK
+HRESULT WINAPI EnumResize(LPDIRECTDRAWSURFACE pSurface, LPDDSURFACEDESC lpSurfaceDesc, LPVOID lpContext)
+{
+    if (lpSurfaceDesc->dwWidth == LastWidth && (lpSurfaceDesc->dwHeight == LastHeight || lpSurfaceDesc->dwHeight == 32))
+	{
+		LONG lsz = sizeof(LONG);
+		LONG lmod = 8;
+		if (lpSurfaceDesc->lPitch != RoundUp(lpSurfaceDesc->dwWidth, 8))
+			lmod = 2;
+		DWORD dwSurfPtr = *(PDWORD)((DWORD)pSurface + lsz);
+		DWORD dwDataPtr = *(PDWORD)dwSurfPtr;
+		DWORD dwInfoPtr = *(PDWORD)(dwSurfPtr + lsz * 2);
+		DWORD dwOldPitchM = lpSurfaceDesc->lPitch / RoundUp(lpSurfaceDesc->dwWidth, lmod);
+		DWORD dwNewPitch = RoundUp(TWidth, lmod) * dwOldPitchM;
+		DWORD dwNewMemSize = dwNewPitch * THeight;
+		LPDWORD lpSurfMemSize = (PDWORD)(dwDataPtr + 0x10);
+		LPDWORD lpSurfMemAddr = (PDWORD)(dwDataPtr + 0xA8);
+		LPWORD lpDataWidth = (PWORD)(dwDataPtr + 0xB2);
+		LPWORD lpDataHeight = (PWORD)(dwDataPtr + 0xB0);
+		LPDWORD lpDataPitch = (PDWORD)(dwDataPtr + 0xAC);
+		LPDWORD lpInfoWidth = (PDWORD)(dwInfoPtr + 0x28);
+		LPDWORD lpInfoHeight = (PDWORD)(dwInfoPtr + 0x2C);
+		LPDWORD lpInfoPitch = (PDWORD)(dwInfoPtr + 0x50);
+		LPDWORD lpInfoMemAddr = (PDWORD)(dwInfoPtr + 0x4C);
+		
+		HLOCAL MemAlloc = LocalHandle((LPCVOID)(*lpSurfMemAddr - lsz * 2));
+
+		if (lpSurfaceDesc->dwHeight == 32)
+			dwNewMemSize = dwNewPitch * 32;
+
+		if (MemAlloc = LocalReAlloc(MemAlloc, dwNewMemSize + lsz * 2, LMEM_MOVEABLE))
+		{
+			PVOID NewMemPtr = LocalLock(MemAlloc);
+			*lpSurfMemSize = dwNewMemSize;
+			*lpSurfMemAddr = (DWORD)NewMemPtr + lsz * 2;
+			*lpDataWidth = TWidth;
+			*lpDataPitch = dwNewPitch;
+			*lpInfoWidth = TWidth;
+			*lpInfoPitch = dwNewPitch;
+			*lpInfoMemAddr = *lpSurfMemAddr;
+
+			if (lpSurfaceDesc->dwHeight != 32)
+			{
+				*lpDataHeight = THeight;
+				*lpInfoHeight = THeight;
+			}
+			LocalUnlock(MemAlloc);
+		}
+	}
+	return DDENUMRET_OK;
+}
+
+LRESULT __declspec(dllexport)__stdcall CALLBACK CallWndProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
 	if (nCode == HC_ACTION)
 	{
@@ -211,7 +271,18 @@ LRESULT __declspec(dllexport)__stdcall  CALLBACK CallWndProc(int nCode, WPARAM w
 					GetClientRect(W2Wnd, &W2rect);
 					SHORT width = (SHORT)(W2rect.right - W2rect.left);
 					SHORT height = (SHORT)(W2rect.bottom - W2rect.top);
+					TWidth = width;
+					THeight = height;
 					PatchMem(width, height);
+					if (DDObj)
+					if (!FAILED(DDObj->GetGDISurface(&GDISurf)))
+					{
+						if (!FAILED(DDObj->EnumSurfaces(DDENUMSURFACES_DOESEXIST | DDENUMSURFACES_ALL, NULL, GDISurf, EnumResize)))
+						{
+							LastWidth = width;
+							LastHeight = height;
+						}
+					}
 				}
 			}
 		}
@@ -221,11 +292,13 @@ LRESULT __declspec(dllexport)__stdcall  CALLBACK CallWndProc(int nCode, WPARAM w
 }
 
 HRESULT(WINAPI *DirectDrawCreateNext)(GUID FAR *lpGUID, LPDIRECTDRAW FAR *lplpDD, IUnknown FAR *pUnkOuter);
-
-HRESULT WINAPI DirectDrawCreateNew(GUID FAR *lpGUID, LPDIRECTDRAW FAR *lplpDD, IUnknown FAR *pUnkOuter)
+HRESULT WINAPI DirectDrawCreateHook(GUID FAR *lpGUID, LPDIRECTDRAW FAR *lplpDD, IUnknown FAR *pUnkOuter)
 {
 	HRESULT result = DirectDrawCreateNext(lpGUID, lplpDD, pUnkOuter);
-	if (result == DD_OK) DDObj = (LPDIRECTDRAW)(*lplpDD);
+	if (result == DD_OK)
+	{
+		DDObj = (LPDIRECTDRAW)(*lplpDD);
+	}
 	return result;
 }
 
@@ -246,13 +319,14 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReser
 		GetAddresses();
 		UnprotectAddresses();
 		PatchMem(SWidth, SHeight);
-
 		wHook = SetWindowsHookEx(WH_CALLWNDPROC, (HOOKPROC)CallWndProc, hModule, GetCurrentThreadId());
-		HookAPI("ddraw.dll", "DirectDrawCreate", DirectDrawCreateNew, (PVOID*)&DirectDrawCreateNext, 0);
+
+		HookAPI("ddraw.dll", "DirectDrawCreate", DirectDrawCreateHook, (PVOID*)&DirectDrawCreateNext, 0);
 	}
 	else if (ul_reason_for_call == DLL_PROCESS_DETACH)
 	{
 		UnhookWindowsHookEx(wHook);
+		FinalizeMadCHook();
 	}
 
 	return 1;
