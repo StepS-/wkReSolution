@@ -13,10 +13,7 @@ CHAR Config[MAX_PATH], LandFile[MAX_PATH];
 HHOOK wHook;
 LPDIRECTDRAW DDObj;
 LPDIRECTDRAWSURFACE GDISurf;
-PVOID W2DDHookStart = (PVOID)0x433E99;
-PVOID W2DDContinue = (PVOID)0x433E9F;
-PVOID W2DDInit = (PVOID)0x40B280;
-PVOID W2DDHookNext;
+PVOID W2DDHookStart, W2DDContinue, W2DDInit, W2DDHookNext;
 PVOID W2DDSizeStruct;
 
 SHORT SWidth, SHeight, TWidth, THeight, LastWidth, LastHeight, GlobalEatLimit, TargetWidth, TargetHeight;
@@ -29,12 +26,15 @@ DWORD AL_WUnk2, AL_HorizontalSidesBox, AL_RenderFromLeft, AL_RenderFromTop, AL_T
 DWORD TopOffset;
 
 #define RoundUp(num, mod) (num + (mod * ((num % mod) != 0) - (num % mod)))
+#define CVal(num, val) (!!(num & val))
+#define ImageBase ((DWORD)GetModuleHandleA(0))
+#define MemOffset(offset) (ImageBase + offset)
+#define ModuleImageBase(module) ((DWORD)GetModuleHandleA(module))
 
 DWORD GetPETimestampA(LPCSTR lpModuleName)
 {
-	DWORD ImageBase = (DWORD)GetModuleHandleA(lpModuleName);
-	DWORD PEOffset = *(DWORD*)(ImageBase + 0x3C);
-	return *(DWORD*)(ImageBase + PEOffset + 0x08);
+	DWORD PEOffset = *(PDWORD)(ImageBase + 0x3C);
+	return *(PDWORD)(ImageBase + PEOffset + 0x08);
 }
 
 BYTE CheckVersion()
@@ -106,32 +106,32 @@ void GetAddresses()
 {
 	//credits for these go to S*natch and des; labels described by StepS
 
-	LandWaterCriticalZone = 0x000279E9 + 0x400C00;
-	CavernWaterEatLimit = 0x000279F6 + 0x400C00;
-	ActualHeight = 0x0003328A + 0x400C00;
-	ActualWidth = 0x00033292 + 0x400C00;
-	TopOffset = 0x00045B38 + 0x400C00;
-	HorizontalSidesBox = 0x00045B40 + 0x400C00;
-	LeftOffset = 0x00045B4D + 0x400C00;
-	VerticalSidesBox = 0x00045B55 + 0x400C00;
-	RenderFromTop = 0x00045B73 + 0x400C00;
-	RenderFromLeft = 0x00045B78 + 0x400C00;
+	LandWaterCriticalZone   = 0x000279E9 + MemOffset(0xC00);
+	CavernWaterEatLimit     = 0x000279F6 + MemOffset(0xC00);
+	ActualHeight            = 0x0003328A + MemOffset(0xC00);
+	ActualWidth             = 0x00033292 + MemOffset(0xC00);
+	TopOffset               = 0x00045B38 + MemOffset(0xC00);
+	HorizontalSidesBox      = 0x00045B40 + MemOffset(0xC00);
+	LeftOffset              = 0x00045B4D + MemOffset(0xC00);
+	VerticalSidesBox        = 0x00045B55 + MemOffset(0xC00);
+	RenderFromTop           = 0x00045B73 + MemOffset(0xC00);
+	RenderFromLeft          = 0x00045B78 + MemOffset(0xC00);
 
-	AL_SWUnk1 = 0x00045A9C + 0x400C00;
-	AL_WUnk2 = 0x00045AB3 + 0x400C00;
-	AL_HorizontalSidesBox = 0x00045AD7 + 0x400C00;
-	AL_TopInfidelBox = 0x00045ADC + 0x400C00;
-	AL_LeftOffset = 0x00045B07 + 0x400C00;
-	AL_RenderFromTop = 0x00045B18 + 0x400C00;
-	AL_RenderFromLeft = 0x00045B1D + 0x400C00;
+	AL_SWUnk1               = 0x00045A9C + MemOffset(0xC00);
+	AL_WUnk2                = 0x00045AB3 + MemOffset(0xC00);
+	AL_HorizontalSidesBox   = 0x00045AD7 + MemOffset(0xC00);
+	AL_TopInfidelBox        = 0x00045ADC + MemOffset(0xC00);
+	AL_LeftOffset           = 0x00045B07 + MemOffset(0xC00);
+	AL_RenderFromTop        = 0x00045B18 + MemOffset(0xC00);
+	AL_RenderFromLeft       = 0x00045B1D + MemOffset(0xC00);
 
-	//	HUnk4                 = 0x000363F6 + 0x400C00;
-	//	HUnk5                 = 0x0004000C + 0x400C00;
+	//	HUnk4               = 0x000363F6 + MemOffset(0xC00);
+	//	HUnk5               = 0x0004000C + MemOffset(0xC00);
 
 	//new things discovered by StepS
 
-	CenterCursorX = 0x00077878 + 0x401C00;
-	CenterCursorY = 0x0007787C + 0x401C00;
+	CenterCursorX           = 0x00077878 + MemOffset(0x1C00);
+	CenterCursorY           = 0x0007787C + MemOffset(0x1C00);
 }
 
 void UnprotectAddresses()
@@ -145,30 +145,30 @@ void PatchMem(SHORT nWidth, SHORT nHeight)
 {
 	GetTargetScreenSize(nWidth, nHeight);
 
-	*(WORD*)LandWaterCriticalZone = GlobalEatLimit;
-	*(WORD*)CavernWaterEatLimit = GlobalEatLimit;
-	*(WORD*)ActualWidth = nWidth;
-	*(WORD*)ActualHeight = nHeight;
-	*(WORD*)RenderFromLeft = TargetWidth;
-	*(WORD*)RenderFromTop = TargetHeight;
-	*(WORD*)HorizontalSidesBox = TargetWidth;
-	*(WORD*)VerticalSidesBox = TargetHeight;
-	*(WORD*)LeftOffset = TargetWidth / 2;
-	*(WORD*)TopOffset = TargetHeight / 2;
+	*(PWORD)LandWaterCriticalZone = GlobalEatLimit;
+	*(PWORD)CavernWaterEatLimit   = GlobalEatLimit;
+	*(PWORD)ActualWidth           = nWidth;
+	*(PWORD)ActualHeight          = nHeight;
+	*(PWORD)RenderFromLeft        = TargetWidth;
+	*(PWORD)RenderFromTop         = TargetHeight;
+	*(PWORD)HorizontalSidesBox    = TargetWidth;
+	*(PWORD)VerticalSidesBox      = TargetHeight;
+	*(PWORD)LeftOffset            = TargetWidth / 2;
+	*(PWORD)TopOffset             = TargetHeight / 2;
 
-	*(WORD*)CenterCursorX = nWidth / 2 > ScreenX / 2 ? ScreenX / 2 : nWidth / 2;
-	*(WORD*)CenterCursorY = nHeight / 2 > ScreenY / 2 ? ScreenY / 2 : nHeight / 2;
+	*(PWORD)AL_WUnk2              = nWidth;
+	*(PWORD)AL_HorizontalSidesBox = TargetWidth;
+	*(PWORD)AL_RenderFromLeft     = TargetWidth;
+	*(PWORD)AL_TopInfidelBox      = TargetHeight;
+	*(PWORD)AL_RenderFromTop      = nHeight;
+	*(PWORD)AL_SWUnk1             = TargetWidth / 2;
+	*(PWORD)AL_LeftOffset         = TargetWidth / 2;
 
-	*(WORD*)AL_WUnk2 = nWidth;
-	*(WORD*)AL_HorizontalSidesBox = TargetWidth;
-	*(WORD*)AL_RenderFromLeft = TargetWidth;
-	*(WORD*)AL_TopInfidelBox = TargetHeight;
-	*(WORD*)AL_RenderFromTop = nHeight;
-	*(WORD*)AL_SWUnk1 = TargetWidth / 2;
-	*(WORD*)AL_LeftOffset = TargetWidth / 2;
+	*(PWORD)CenterCursorX = nWidth / 2 > ScreenX / 2 ? ScreenX / 2 : nWidth / 2;
+	*(PWORD)CenterCursorY = nHeight / 2 > ScreenY / 2 ? ScreenY / 2 : nHeight / 2;
 
-	//  *(WORD*)HUnk4 = nHeight;
-	//  *(WORD*)HUnk5 = nHeight;
+	//  *(PWORD)HUnk4 = nHeight;
+	//  *(PWORD)HUnk5 = nHeight;
 	//  unknown, readonly values
 }
 
@@ -245,20 +245,21 @@ HRESULT WINAPI EnumResize(LPDIRECTDRAWSURFACE pSurface, LPDDSURFACEDESC lpSurfac
 		LONG lmod = 8;
 		if (lpSurfaceDesc->lPitch != RoundUp(lpSurfaceDesc->dwWidth, 8))
 			lmod = 2;
-		DWORD dwSurfPtr = *(PDWORD)((DWORD)pSurface + lsz);
-		DWORD dwDataPtr = *(PDWORD)dwSurfPtr;
-		DWORD dwInfoPtr = *(PDWORD)(dwSurfPtr + lsz * 2);
-		DWORD dwOldPitchM = lpSurfaceDesc->lPitch / RoundUp(lpSurfaceDesc->dwWidth, lmod);
-		DWORD dwNewPitch = RoundUp(TWidth, lmod) * dwOldPitchM;
-		DWORD dwNewMemSize = dwNewPitch * THeight;
+
+		DWORD   dwSurfPtr     = *(PDWORD)((DWORD)pSurface + lsz);
+		DWORD   dwDataPtr     = *(PDWORD)dwSurfPtr;
+		DWORD   dwInfoPtr     = *(PDWORD)(dwSurfPtr + lsz * 2);
+		DWORD   dwOldPitchM   = lpSurfaceDesc->lPitch / RoundUp(lpSurfaceDesc->dwWidth, lmod);
+		DWORD   dwNewPitch    = RoundUp(TWidth, lmod) * dwOldPitchM;
+		DWORD   dwNewMemSize  = dwNewPitch * THeight;
 		LPDWORD lpSurfMemSize = (PDWORD)(dwDataPtr + 0x10);
 		LPDWORD lpSurfMemAddr = (PDWORD)(dwDataPtr + 0xA8);
-		LPWORD lpDataWidth = (PWORD)(dwDataPtr + 0xB2);
-		LPWORD lpDataHeight = (PWORD)(dwDataPtr + 0xB0);
-		LPDWORD lpDataPitch = (PDWORD)(dwDataPtr + 0xAC);
-		LPDWORD lpInfoWidth = (PDWORD)(dwInfoPtr + 0x28);
-		LPDWORD lpInfoHeight = (PDWORD)(dwInfoPtr + 0x2C);
-		LPDWORD lpInfoPitch = (PDWORD)(dwInfoPtr + 0x50);
+		LPWORD  lpDataWidth   = (PWORD) (dwDataPtr + 0xB2);
+		LPWORD  lpDataHeight  = (PWORD) (dwDataPtr + 0xB0);
+		LPDWORD lpDataPitch   = (PDWORD)(dwDataPtr + 0xAC);
+		LPDWORD lpInfoWidth   = (PDWORD)(dwInfoPtr + 0x28);
+		LPDWORD lpInfoHeight  = (PDWORD)(dwInfoPtr + 0x2C);
+		LPDWORD lpInfoPitch   = (PDWORD)(dwInfoPtr + 0x50);
 		LPDWORD lpInfoMemAddr = (PDWORD)(dwInfoPtr + 0x4C);
 		
 		HLOCAL MemAlloc = LocalHandle((LPCVOID)(*lpSurfMemAddr - lsz * 2));
@@ -269,13 +270,13 @@ HRESULT WINAPI EnumResize(LPDIRECTDRAWSURFACE pSurface, LPDDSURFACEDESC lpSurfac
 		if (MemAlloc = LocalReAlloc(MemAlloc, dwNewMemSize + lsz * 2, LMEM_MOVEABLE))
 		{
 			PVOID NewMemPtr = LocalLock(MemAlloc);
-			*lpSurfMemSize = dwNewMemSize;
-			*lpSurfMemAddr = (DWORD)NewMemPtr + lsz * 2;
-			*lpDataWidth = TWidth;
-			*lpDataPitch = dwNewPitch;
-			*lpInfoWidth = TWidth;
-			*lpInfoPitch = dwNewPitch;
-			*lpInfoMemAddr = *lpSurfMemAddr;
+			*lpSurfMemSize  = dwNewMemSize;
+			*lpSurfMemAddr  = (DWORD)NewMemPtr + lsz * 2;
+			*lpDataWidth    = TWidth;
+			*lpDataPitch    = dwNewPitch;
+			*lpInfoWidth    = TWidth;
+			*lpInfoPitch    = dwNewPitch;
+			*lpInfoMemAddr  = *lpSurfMemAddr;
 
 			if (lpSurfaceDesc->dwHeight != 32)
 			{
@@ -294,12 +295,18 @@ LRESULT __declspec(dllexport)__stdcall CALLBACK CallWndProc(int nCode, WPARAM wP
 	{
 		CWPSTRUCT* pwp = (CWPSTRUCT*)lParam;
 
-		if (pwp->message == WM_EXITSIZEMOVE)
+		if (pwp->message == WM_EXITSIZEMOVE || pwp->message == WM_WINDOWPOSCHANGED)
 		{
 			if (HWND W2Wnd = FindWindow("Worms2", NULL))
 			{
 				if (pwp->hwnd == W2Wnd)
 				{
+					if (pwp->message == WM_WINDOWPOSCHANGED)
+					{
+						LPWINDOWPOS lwp = (LPWINDOWPOS)(pwp->lParam);
+						if (!(!CVal(lwp->flags, SWP_NOSIZE) && !CVal(lwp->flags, SWP_NOCOPYBITS) && !CVal(lwp->flags, SWP_NOSENDCHANGING)))
+							return CallNextHookEx(wHook, nCode, wParam, lParam);
+					}
 					if (DDObj)
 					if (!FAILED(DDObj->GetGDISurface(&GDISurf)))
 					{
@@ -307,18 +314,21 @@ LRESULT __declspec(dllexport)__stdcall CALLBACK CallWndProc(int nCode, WPARAM wP
 						GetClientRect(W2Wnd, &W2rect);
 						SHORT width = (SHORT)(W2rect.right - W2rect.left);
 						SHORT height = (SHORT)(W2rect.bottom - W2rect.top);
-						TWidth = width;
-						THeight = height;
-						PatchMem(TWidth, THeight);
-						if (W2DDSizeStruct)
+						if (width > 0 && height > 0)
 						{
-							*(PDWORD)((DWORD)W2DDSizeStruct + sizeof(LONG) * 2) = TWidth;
-							*(PDWORD)((DWORD)W2DDSizeStruct + sizeof(LONG) * 3) = THeight;
-						}
-						if (!FAILED(DDObj->EnumSurfaces(DDENUMSURFACES_DOESEXIST | DDENUMSURFACES_ALL, NULL, GDISurf, EnumResize)))
-						{
-							LastWidth = width;
-							LastHeight = height;
+							TWidth = width;
+							THeight = height;
+							PatchMem(TWidth, THeight);
+							if (W2DDSizeStruct)
+							{
+								*(PDWORD)((DWORD)W2DDSizeStruct + sizeof(LONG)* 2) = TWidth;
+								*(PDWORD)((DWORD)W2DDSizeStruct + sizeof(LONG)* 3) = THeight;
+							}
+							if (!FAILED(DDObj->EnumSurfaces(DDENUMSURFACES_DOESEXIST | DDENUMSURFACES_ALL, NULL, GDISurf, EnumResize)))
+							{
+								LastWidth = TWidth;
+								LastHeight = THeight;
+							}
 						}
 					}
 				}
@@ -352,6 +362,13 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReser
 				MB_OK | MB_ICONERROR);
 			return 1;
 		}
+		else
+		{
+			W2DDHookStart = (PVOID)MemOffset(0x33E99);
+			W2DDContinue  = (PVOID)MemOffset(0x33E9F);
+			W2DDInit      = (PVOID)MemOffset(0x0B280);
+		}
+
 		LoadConfig();
 		CavernCheck();
 		GetAddresses();
