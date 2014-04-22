@@ -10,6 +10,7 @@
 bool Cavern;
 BYTE Version;
 CHAR Config[MAX_PATH], LandFile[MAX_PATH];
+HWND W2Wnd;
 HHOOK wHook;
 LPDIRECTDRAW DDObj;
 LPDIRECTDRAWSURFACE GDISurf;
@@ -298,37 +299,33 @@ LRESULT __declspec(dllexport)__stdcall CALLBACK CallWndProc(int nCode, WPARAM wP
 	if (nCode == HC_ACTION)
 	{
 		CWPSTRUCT* pwp = (CWPSTRUCT*)lParam;
-
 		if (pwp->message == WM_WINDOWPOSCHANGED)
 		{
-			if (HWND W2Wnd = FindWindow("Worms2", NULL))
+			if (pwp->hwnd == W2Wnd)
 			{
-				if (pwp->hwnd == W2Wnd)
+				LPWINDOWPOS lwp = (LPWINDOWPOS)(pwp->lParam);
+				if (!CVal(lwp->flags, SWP_NOSIZE) && !CVal(lwp->flags, SWP_NOCOPYBITS) && !CVal(lwp->flags, SWP_NOSENDCHANGING))
+				if (DDObj)
+				if (!FAILED(DDObj->GetGDISurface(&GDISurf)))
 				{
-					LPWINDOWPOS lwp = (LPWINDOWPOS)(pwp->lParam);
-					if (!CVal(lwp->flags, SWP_NOSIZE) && !CVal(lwp->flags, SWP_NOCOPYBITS) && !CVal(lwp->flags, SWP_NOSENDCHANGING))
-					if (DDObj)
-					if (!FAILED(DDObj->GetGDISurface(&GDISurf)))
+					RECT W2rect;
+					GetClientRect(W2Wnd, &W2rect);
+					SHORT width = (SHORT)(W2rect.right - W2rect.left);
+					SHORT height = (SHORT)(W2rect.bottom - W2rect.top);
+					if (width > 0 && height > 0)
 					{
-						RECT W2rect;
-						GetClientRect(W2Wnd, &W2rect);
-						SHORT width = (SHORT)(W2rect.right - W2rect.left);
-						SHORT height = (SHORT)(W2rect.bottom - W2rect.top);
-						if (width > 0 && height > 0)
+						TWidth = width;
+						THeight = height;
+						PatchMem(TWidth, THeight);
+						if (W2DDSizeStruct)
 						{
-							TWidth = width;
-							THeight = height;
-							PatchMem(TWidth, THeight);
-							if (W2DDSizeStruct)
-							{
-								*(PDWORD)((DWORD)W2DDSizeStruct + sizeof(LONG)* 2) = TWidth;
-								*(PDWORD)((DWORD)W2DDSizeStruct + sizeof(LONG)* 3) = THeight;
-							}
-							if (!FAILED(DDObj->EnumSurfaces(DDENUMSURFACES_DOESEXIST | DDENUMSURFACES_ALL, NULL, GDISurf, EnumResize)))
-							{
-								LastWidth = TWidth;
-								LastHeight = THeight;
-							}
+							*(PDWORD)((DWORD)W2DDSizeStruct + sizeof(LONG)* 2) = TWidth;
+							*(PDWORD)((DWORD)W2DDSizeStruct + sizeof(LONG)* 3) = THeight;
+						}
+						if (!FAILED(DDObj->EnumSurfaces(DDENUMSURFACES_DOESEXIST | DDENUMSURFACES_ALL, NULL, GDISurf, EnumResize)))
+						{
+							LastWidth = TWidth;
+							LastHeight = THeight;
 						}
 					}
 				}
@@ -348,6 +345,22 @@ HRESULT WINAPI DirectDrawCreateHook(GUID FAR *lpGUID, LPDIRECTDRAW FAR *lplpDD, 
 		DDObj = (LPDIRECTDRAW)(*lplpDD);
 	}
 	return result;
+}
+
+HWND(WINAPI *CreateWindowExANext)(DWORD dwExStyle, LPCTSTR lpClassName, LPCTSTR lpWindowName, DWORD dwStyle, int x, int y,
+	int nWidth, int nHeight, HWND hWndParent, HMENU hMenu, HINSTANCE hInstance, LPVOID lpParam);
+HWND WINAPI CreateWindowExAHook(DWORD dwExStyle, LPCTSTR lpClassName, LPCTSTR lpWindowName, DWORD dwStyle, int x, int y,
+	int nWidth, int nHeight, HWND hWndParent, HMENU hMenu, HINSTANCE hInstance, LPVOID lpParam)
+{
+	HWND Wnd = CreateWindowExANext(dwExStyle, lpClassName, lpWindowName, dwStyle, x, y, nWidth, nHeight, hWndParent, hMenu, hInstance, lpParam);
+	if (lpClassName)
+	{
+		if (strcmp(lpClassName, "Worms2"))
+		{
+			W2Wnd = Wnd;
+		}
+	}
+	return Wnd;
 }
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved)
@@ -377,6 +390,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReser
 		wHook = SetWindowsHookEx(WH_CALLWNDPROC, (HOOKPROC)CallWndProc, hModule, GetCurrentThreadId());
 
 		HookAPI("ddraw.dll", "DirectDrawCreate", DirectDrawCreateHook, (PVOID*)&DirectDrawCreateNext, 0);
+		HookAPI("user32.dll", "CreateWindowExA", CreateWindowExAHook, (PVOID*)&CreateWindowExANext, 0);
 		HookCode(W2DDHookStart, W2DDInitHook, (PVOID*)&W2DDHookNext, 0);
 	}
 	else if (ul_reason_for_call == DLL_PROCESS_DETACH)
