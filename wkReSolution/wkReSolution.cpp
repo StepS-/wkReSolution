@@ -239,7 +239,11 @@ __declspec(naked) void W2DDInitHook()
 //HACK
 HRESULT WINAPI EnumResize(LPDIRECTDRAWSURFACE pSurface, LPDDSURFACEDESC lpSurfaceDesc, LPVOID lpContext)
 {
-    if (lpSurfaceDesc->dwWidth == LastWidth && (lpSurfaceDesc->dwHeight == LastHeight || lpSurfaceDesc->dwHeight == 32))
+	BOOL bRequiredSurface = (!CVal(lpSurfaceDesc->dwFlags, DDSD_CKSRCBLT) && lpSurfaceDesc->dwWidth == LastWidth && lpSurfaceDesc->dwHeight == LastHeight);
+	BOOL bThirtyTwoSurface = (CVal(lpSurfaceDesc->dwFlags, DDSD_CKSRCBLT) && lpSurfaceDesc->dwWidth == LastWidth && lpSurfaceDesc->dwHeight == 32);
+	BOOL bPrimary = (CVal(lpSurfaceDesc->ddsCaps.dwCaps, DDSCAPS_PRIMARYSURFACE));
+
+	if ((bRequiredSurface || bThirtyTwoSurface) && !bPrimary)
 	{
 		LONG lsz = sizeof(LONG);
 		LONG lmod = 8;
@@ -264,7 +268,7 @@ HRESULT WINAPI EnumResize(LPDIRECTDRAWSURFACE pSurface, LPDDSURFACEDESC lpSurfac
 		
 		HLOCAL MemAlloc = LocalHandle((LPCVOID)(*lpSurfMemAddr - lsz * 2));
 
-		if (lpSurfaceDesc->dwHeight == 32)
+		if (bThirtyTwoSurface)
 			dwNewMemSize = dwNewPitch * 32;
 
 		if (MemAlloc = LocalReAlloc(MemAlloc, dwNewMemSize + lsz * 2, LMEM_MOVEABLE))
@@ -278,7 +282,7 @@ HRESULT WINAPI EnumResize(LPDIRECTDRAWSURFACE pSurface, LPDDSURFACEDESC lpSurfac
 			*lpInfoPitch    = dwNewPitch;
 			*lpInfoMemAddr  = *lpSurfMemAddr;
 
-			if (lpSurfaceDesc->dwHeight != 32)
+			if (!bThirtyTwoSurface)
 			{
 				*lpDataHeight = THeight;
 				*lpInfoHeight = THeight;
@@ -295,18 +299,14 @@ LRESULT __declspec(dllexport)__stdcall CALLBACK CallWndProc(int nCode, WPARAM wP
 	{
 		CWPSTRUCT* pwp = (CWPSTRUCT*)lParam;
 
-		if (pwp->message == WM_EXITSIZEMOVE || pwp->message == WM_WINDOWPOSCHANGED)
+		if (pwp->message == WM_WINDOWPOSCHANGED)
 		{
 			if (HWND W2Wnd = FindWindow("Worms2", NULL))
 			{
 				if (pwp->hwnd == W2Wnd)
 				{
-					if (pwp->message == WM_WINDOWPOSCHANGED)
-					{
-						LPWINDOWPOS lwp = (LPWINDOWPOS)(pwp->lParam);
-						if (!(!CVal(lwp->flags, SWP_NOSIZE) && !CVal(lwp->flags, SWP_NOCOPYBITS) && !CVal(lwp->flags, SWP_NOSENDCHANGING)))
-							return CallNextHookEx(wHook, nCode, wParam, lParam);
-					}
+					LPWINDOWPOS lwp = (LPWINDOWPOS)(pwp->lParam);
+					if (!CVal(lwp->flags, SWP_NOSIZE) && !CVal(lwp->flags, SWP_NOCOPYBITS) && !CVal(lwp->flags, SWP_NOSENDCHANGING))
 					if (DDObj)
 					if (!FAILED(DDObj->GetGDISurface(&GDISurf)))
 					{
