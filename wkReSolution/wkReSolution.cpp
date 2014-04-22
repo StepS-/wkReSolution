@@ -225,6 +225,25 @@ __declspec(naked) void EndMadHook()
 	}
 }
 
+__declspec(naked) void UpdateW2DDSizeStruct()
+{
+	__asm
+	{
+		push eax
+		push ebx
+		push ecx
+		mov eax, dword ptr ds:[TargetWidth]
+		mov ebx, dword ptr ds:[TargetHeight]
+		mov ecx, dword ptr ds:[W2DDSizeStruct]
+		mov dword ptr ds:[ecx + 8h], eax
+		mov dword ptr ds:[ecx + 0Ch], ebx
+		pop ecx
+		pop ebx
+		pop eax
+		ret
+	}
+}
+
 __declspec(naked) void W2DDInitHook()
 {
 	__asm
@@ -233,6 +252,7 @@ __declspec(naked) void W2DDInitHook()
 		push eax
 		call W2DDInit
 		mov dword ptr ds:[W2DDSizeStruct], eax
+		call UpdateW2DDSizeStruct
 		jmp W2DDContinue
 	}
 }
@@ -319,8 +339,7 @@ LRESULT __declspec(dllexport)__stdcall CALLBACK CallWndProc(int nCode, WPARAM wP
 						PatchMem(TWidth, THeight);
 						if (W2DDSizeStruct)
 						{
-							*(PDWORD)((DWORD)W2DDSizeStruct + sizeof(LONG)* 2) = TWidth;
-							*(PDWORD)((DWORD)W2DDSizeStruct + sizeof(LONG)* 3) = THeight;
+							UpdateW2DDSizeStruct();
 						}
 						if (!FAILED(DDObj->EnumSurfaces(DDENUMSURFACES_DOESEXIST | DDENUMSURFACES_ALL, NULL, GDISurf, EnumResize)))
 						{
