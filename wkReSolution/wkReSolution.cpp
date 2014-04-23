@@ -198,6 +198,8 @@ void LoadConfig()
 		WritePrivateProfileIntA("Resolution", "ScreenHeight", SHeight, Config);
 	}
 
+	TargetWidth = SWidth;
+	TargetHeight = SHeight;
 	LastWidth = SWidth;
 	LastHeight = SHeight;
 	TWidth = SWidth;
@@ -326,7 +328,7 @@ LRESULT __declspec(dllexport)__stdcall CALLBACK CallWndProc(int nCode, WPARAM wP
 				LPWINDOWPOS lwp = (LPWINDOWPOS)(pwp->lParam);
 				if (!CVal(lwp->flags, SWP_NOSIZE) && !CVal(lwp->flags, SWP_NOCOPYBITS) && !CVal(lwp->flags, SWP_NOSENDCHANGING))
 				if (DDObj)
-				if (!FAILED(DDObj->GetGDISurface(&GDISurf)))
+				if (SUCCEEDED(DDObj->GetGDISurface(&GDISurf)))
 				{
 					RECT W2rect;
 					GetClientRect(W2Wnd, &W2rect);
@@ -341,7 +343,7 @@ LRESULT __declspec(dllexport)__stdcall CALLBACK CallWndProc(int nCode, WPARAM wP
 						{
 							UpdateW2DDSizeStruct();
 						}
-						if (!FAILED(DDObj->EnumSurfaces(DDENUMSURFACES_DOESEXIST | DDENUMSURFACES_ALL, NULL, GDISurf, EnumResize)))
+						if (SUCCEEDED(DDObj->EnumSurfaces(DDENUMSURFACES_DOESEXIST | DDENUMSURFACES_ALL, NULL, GDISurf, EnumResize)))
 						{
 							LastWidth = TWidth;
 							LastHeight = THeight;
@@ -359,22 +361,22 @@ HRESULT(WINAPI *DirectDrawCreateNext)(GUID FAR *lpGUID, LPDIRECTDRAW FAR *lplpDD
 HRESULT WINAPI DirectDrawCreateHook(GUID FAR *lpGUID, LPDIRECTDRAW FAR *lplpDD, IUnknown FAR *pUnkOuter)
 {
 	HRESULT result = DirectDrawCreateNext(lpGUID, lplpDD, pUnkOuter);
-	if (result == DD_OK)
+	if (SUCCEEDED(result))
 	{
 		DDObj = (LPDIRECTDRAW)(*lplpDD);
 	}
 	return result;
 }
 
-HWND(WINAPI *CreateWindowExANext)(DWORD dwExStyle, LPCTSTR lpClassName, LPCTSTR lpWindowName, DWORD dwStyle, int x, int y,
+HWND(WINAPI *CreateWindowExANext)(DWORD dwExStyle, LPCSTR lpClassName, LPCSTR lpWindowName, DWORD dwStyle, int x, int y,
 	int nWidth, int nHeight, HWND hWndParent, HMENU hMenu, HINSTANCE hInstance, LPVOID lpParam);
-HWND WINAPI CreateWindowExAHook(DWORD dwExStyle, LPCTSTR lpClassName, LPCTSTR lpWindowName, DWORD dwStyle, int x, int y,
+HWND WINAPI CreateWindowExAHook(DWORD dwExStyle, LPCSTR lpClassName, LPCSTR lpWindowName, DWORD dwStyle, int x, int y,
 	int nWidth, int nHeight, HWND hWndParent, HMENU hMenu, HINSTANCE hInstance, LPVOID lpParam)
 {
 	HWND Wnd = CreateWindowExANext(dwExStyle, lpClassName, lpWindowName, dwStyle, x, y, nWidth, nHeight, hWndParent, hMenu, hInstance, lpParam);
 	if (lpClassName)
 	{
-		if (strcmp(lpClassName, "Worms2"))
+		if (!strcmp(lpClassName, "worms2"))
 		{
 			W2Wnd = Wnd;
 		}
