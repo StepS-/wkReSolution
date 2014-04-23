@@ -14,7 +14,7 @@ HWND W2Wnd;
 HHOOK wHook;
 LPDIRECTDRAW DDObj;
 LPDIRECTDRAWSURFACE GDISurf;
-PVOID W2DDHookStart, W2DDContinue, W2DDInit, W2DDHookNext;
+PVOID W2DDHookStart, W2DDHookNext;
 PVOID W2DDSizeStruct;
 
 SHORT SWidth, SHeight, TWidth, THeight, LastWidth, LastHeight, GlobalEatLimit, TargetWidth, TargetHeight;
@@ -234,11 +234,11 @@ __declspec(naked) void UpdateW2DDSizeStruct()
 		push eax
 		push ebx
 		push ecx
-		mov eax, dword ptr ds:[TargetWidth]
-		mov ebx, dword ptr ds:[TargetHeight]
-		mov ecx, dword ptr ds:[W2DDSizeStruct]
-		mov dword ptr ds:[ecx + 8h], eax
-		mov dword ptr ds:[ecx + 0Ch], ebx
+		mov ax, [TargetWidth]
+		mov bx, [TargetHeight]
+		mov ecx, [W2DDSizeStruct]
+		mov [ecx + 8h], ax
+		mov [ecx + 0Ch], bx
 		pop ecx
 		pop ebx
 		pop eax
@@ -251,11 +251,9 @@ __declspec(naked) void W2DDInitHook()
 	__asm
 	{
 		call EndMadHook
-		push eax
-		call W2DDInit
-		mov dword ptr ds:[W2DDSizeStruct], eax
+		mov [W2DDSizeStruct], eax
 		call UpdateW2DDSizeStruct
-		jmp W2DDContinue
+		jmp W2DDHookNext
 	}
 }
 
@@ -398,9 +396,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReser
 		}
 		else
 		{
-			W2DDHookStart = (PVOID)MemOffset(0x33E99);
-			W2DDContinue  = (PVOID)MemOffset(0x33E9F);
-			W2DDInit      = (PVOID)MemOffset(0x0B280);
+			W2DDHookStart = (PVOID)MemOffset(0x33E9F);
 		}
 
 		LoadConfig();
