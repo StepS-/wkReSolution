@@ -26,6 +26,8 @@ DWORD LeftOffset, CenterCursorX, CenterCursorY;
 DWORD AL_WUnk2, AL_HorizontalSidesBox, AL_RenderFromLeft, AL_RenderFromTop, AL_TopInfidelBox, AL_SWUnk1, AL_LeftOffset;
 DWORD TopOffset;
 
+void(*RenderGame)();
+
 #define RoundUp(num, mod) (num + (mod * ((num % mod) != 0) - (num % mod)))
 #define CVal(num, val) (!!(num & val))
 #define ImageBase ((DWORD)GetModuleHandleA(0))
@@ -345,6 +347,7 @@ LRESULT __declspec(dllexport)__stdcall CALLBACK CallWndProc(int nCode, WPARAM wP
 						{
 							LastWidth = TWidth;
 							LastHeight = THeight;
+							RenderGame();
 						}
 					}
 				}
@@ -373,12 +376,8 @@ HWND WINAPI CreateWindowExAHook(DWORD dwExStyle, LPCSTR lpClassName, LPCSTR lpWi
 {
 	HWND Wnd = CreateWindowExANext(dwExStyle, lpClassName, lpWindowName, dwStyle, x, y, nWidth, nHeight, hWndParent, hMenu, hInstance, lpParam);
 	if (lpClassName)
-	{
 		if (!strcmp(lpClassName, "worms2"))
-		{
 			W2Wnd = Wnd;
-		}
-	}
 	return Wnd;
 }
 
@@ -397,6 +396,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReser
 		else
 		{
 			W2DDHookStart = (PVOID)MemOffset(0x33E9F);
+			RenderGame = (void(*)())MemOffset(0x34750);
 		}
 
 		LoadConfig();
