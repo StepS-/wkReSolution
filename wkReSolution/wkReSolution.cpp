@@ -309,6 +309,14 @@ HRESULT WINAPI EnumResize(LPDIRECTDRAWSURFACE pSurface, LPDDSURFACEDESC lpSurfac
 			{
 				*lpDataHeight = THeight;
 				*lpInfoHeight = THeight;
+
+				//cleaning the excess picture data
+				GetTargetScreenSize(TWidth, THeight);
+				if (TargetHeight < THeight)
+					memset((PVOID)(*lpSurfMemAddr + dwNewPitch*TargetHeight), 0, dwNewPitch * (THeight - TargetHeight));
+				if (TargetWidth < TWidth)
+					for (int i = 0; i < TargetHeight; i++)
+					memset((PVOID)(*lpSurfMemAddr + i*dwNewPitch + TargetWidth*dwOldPitchM), 0, dwNewPitch - TargetWidth*dwOldPitchM);
 			}
 			LocalUnlock(MemAlloc);
 		}
@@ -338,13 +346,11 @@ LRESULT __declspec(dllexport)__stdcall CALLBACK CallWndProc(int nCode, WPARAM wP
 					{
 						TWidth = width;
 						THeight = height;
-						PatchMem(TWidth, THeight);
-						if (W2DDSizeStruct)
-						{
-							UpdateW2DDSizeStruct();
-						}
 						if (SUCCEEDED(DDObj->EnumSurfaces(DDENUMSURFACES_DOESEXIST | DDENUMSURFACES_ALL, NULL, GDISurf, EnumResize)))
 						{
+							PatchMem(TWidth, THeight);
+							if (W2DDSizeStruct)
+								UpdateW2DDSizeStruct();
 							LastWidth = TWidth;
 							LastHeight = THeight;
 							RenderGame();
