@@ -76,10 +76,19 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="wkReSolution.cpp" />
+    <ClCompile Include="hooks.cpp" />
+    <ClCompile Include="misc_tools.cpp" />
+    <ClCompile Include="w2res.cpp" />
+    <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="version.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="hooks.h" />
+    <ClInclude Include="main.h" />
+    <ClInclude Include="misc_tools.h" />
+    <ClInclude Include="w2res.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

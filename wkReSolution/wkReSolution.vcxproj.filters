@@ -15,7 +15,16 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="wkReSolution.cpp">
+    <ClCompile Include="hooks.cpp">
+      <Filter>Code</Filter>
+    </ClCompile>
+    <ClCompile Include="w2res.cpp">
+      <Filter>Code</Filter>
+    </ClCompile>
+    <ClCompile Include="misc_tools.cpp">
+      <Filter>Code</Filter>
+    </ClCompile>
+    <ClCompile Include="main.cpp">
       <Filter>Code</Filter>
     </ClCompile>
   </ItemGroup>
@@ -23,5 +32,19 @@
     <ResourceCompile Include="version.rc">
       <Filter>Resources</Filter>
     </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="hooks.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="w2res.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="misc_tools.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="main.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
