@@ -13,23 +13,24 @@ void LoadConfig()
 
 	SWidth = GetPrivateProfileIntA("Resolution", "ScreenWidth", -1, Config);
 	SHeight = GetPrivateProfileIntA("Resolution", "ScreenHeight", -1, Config);
+	AllowResize = GetPrivateProfileIntA("Resolution", "AllowResize", -1, Config);
+	ProgressiveResize = GetPrivateProfileIntA("Resolution", "ProgressiveResize", -1, Config);
 	OfflineCavernFloodFix = GetPrivateProfileIntA("Resolution", "OfflineCavernFloodFix", -1, Config);
 
 	ScreenX = (SHORT)GetSystemMetrics(SM_CXSCREEN);
 	ScreenY = (SHORT)GetSystemMetrics(SM_CYSCREEN);
 
 	if (OfflineCavernFloodFix < 0)
-	{
-		OfflineCavernFloodFix = 1;
-		WritePrivateProfileIntA("Resolution", "OfflineCavernFloodFix", 1, Config);
-	}
+		WritePrivateProfileIntA("Resolution", "OfflineCavernFloodFix", OfflineCavernFloodFix = 1, Config);
+	if (AllowResize < 0)
+		WritePrivateProfileIntA("Resolution", "AllowResize", AllowResize = 1, Config);
+	if (ProgressiveResize < 0)
+		WritePrivateProfileIntA("Resolution", "ProgressiveResize", ProgressiveResize = 1, Config);
 
 	if (SWidth <= 0 || SHeight <= 0)
 	{
-		SWidth = ScreenX;
-		SHeight = ScreenY;
-		WritePrivateProfileIntA("Resolution", "ScreenWidth", SWidth, Config);
-		WritePrivateProfileIntA("Resolution", "ScreenHeight", SHeight, Config);
+		WritePrivateProfileIntA("Resolution", "ScreenWidth", SWidth = ScreenX, Config);
+		WritePrivateProfileIntA("Resolution", "ScreenHeight", SHeight = ScreenY, Config);
 	}
 
 	TargetWidth = SWidth;
@@ -48,7 +49,7 @@ void LoadConfig()
 		GlobalEatLimit = 480;
 }
 
-BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved)
+BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
 {
 	if (ul_reason_for_call == DLL_PROCESS_ATTACH)
 	{
@@ -60,7 +61,6 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReser
 				MB_OK | MB_ICONERROR);
 			return 1;
 		}
-
 
 		LoadConfig();
 		CavernCheck();

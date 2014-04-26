@@ -158,7 +158,7 @@ LRESULT __declspec(dllexport) CALLBACK CallWndProc(int nCode, WPARAM wParam, LPA
 							PatchMem(TWidth, THeight);
 							if (W2DDSizeStruct)
 								UpdateW2DDSizeStruct();
-							if (ModifiedSurfaces)
+							if (ModifiedSurfaces && ProgressiveResize)
 								RenderGame(); //Experimental: rerender the scene right after resizing
 						}
 					}
@@ -193,14 +193,18 @@ HWND WINAPI CreateWindowExAHook(DWORD dwExStyle, LPCSTR lpClassName, LPCSTR lpWi
 
 void InstallHooks()
 {
-	wHook = SetWindowsHookEx(WH_CALLWNDPROC, (HOOKPROC)CallWndProc, 0, GetCurrentThreadId());
-	HookAPI("ddraw.dll", "DirectDrawCreate", DirectDrawCreateHook, (PVOID*)&DirectDrawCreateNext, 0);
-	HookAPI("user32.dll", "CreateWindowExA", CreateWindowExAHook, (PVOID*)&CreateWindowExANext, 0);
+	if (AllowResize)
+	{
+		wHook = SetWindowsHookEx(WH_CALLWNDPROC, (HOOKPROC)CallWndProc, 0, GetCurrentThreadId());
+		HookAPI("ddraw.dll", "DirectDrawCreate", DirectDrawCreateHook, (PVOID*)&DirectDrawCreateNext, 0);
+		HookAPI("user32.dll", "CreateWindowExA", CreateWindowExAHook, (PVOID*)&CreateWindowExANext, 0);
+	}
 	HookCode(W2DDHookStart, W2DDInitHook, (PVOID*)&W2DDHookNext, 0);
 }
 
 void UninstallHooks()
 {
-	UnhookWindowsHookEx(wHook);
+	if (AllowResize)
+		UnhookWindowsHookEx(wHook);
 	FinalizeMadCHook();
 }

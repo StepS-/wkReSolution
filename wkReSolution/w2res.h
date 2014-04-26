@@ -9,7 +9,7 @@ extern CHAR Config[MAX_PATH], LandFile[MAX_PATH];
 
 extern SHORT SWidth, SHeight, GlobalEatLimit, TargetWidth, TargetHeight;
 extern SHORT ScreenX, ScreenY;
-extern BOOL OfflineCavernFloodFix;
+extern BOOL OfflineCavernFloodFix, AllowResize, ProgressiveResize;
 extern PFVOID RenderGame;
 
 BYTE CheckVersion();

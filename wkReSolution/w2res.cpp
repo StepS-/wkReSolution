@@ -10,7 +10,7 @@ CHAR Config[MAX_PATH], LandFile[MAX_PATH];
 
 SHORT SWidth, SHeight, GlobalEatLimit, TargetWidth, TargetHeight;
 SHORT ScreenX, ScreenY;
-BOOL OfflineCavernFloodFix;
+BOOL OfflineCavernFloodFix, AllowResize, ProgressiveResize;
 DWORD ActualWidth, HorizontalSidesBox, RenderFromLeft;
 DWORD LandWaterCriticalZone, CavernWaterEatLimit, ActualHeight, HUnk4, HUnk5, RenderFromTop, VerticalSidesBox;
 DWORD LeftOffset, CenterCursorX, CenterCursorY;
