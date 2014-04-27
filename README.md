@@ -23,4 +23,5 @@ The installation is very simple:
 
 # TODO
 
+- Automatically adjust the position of the instant-replay TV brackets and allow a way to disable them.
 - Detect when the water starts flooding in caverns and apply the needed screen size mode. Right now, an offline fix is applied, requiring everyone online to have the module installed in order to maintain sync.
