@@ -12,9 +12,11 @@ The installation is very simple:
 # Features
 
 - Can change resolution (and thus, window size) to any value using the W2.ini file
-- In conjunction with windowed mode, allows to shrink or extend the game window so that it actually resizes the free screen space available in the game.
+- In conjunction with windowed mode, allows to shrink or extend the game window so that it actually resizes the real screen estate of the game.
  + Enable "AllowResize" setting in the ini file to activate this.
  + Enabling "ProgressiveResize" (experimental) will immediately redraw the window as you resize it, making the scenery resize very lively and smoothly.
+ + As usual with windowed mode, make sure that the ScreenWidth and ScreenHeight are set to values lower than the screen resolution of your primary monitor.
+ + In windowed mode, pressing Ctrl+G will show the cursor and allow you to move it above the game's window, to resize the window.
 - Works flawlessly on open-island maps
 - Respects caverns, automatically applying the screen box for resolutions bigger than 1920x856
 - Supports island resolutions bigger than 6012x2902
