@@ -1,5 +1,7 @@
 **ReSolution** is a new [WormKit](http://worms2d.info/WormKit) module for Worms 2 (version 1.05 and GOG) to change the in-game screen resolution to any value. Its key features are simplicity (don't need to patch the executable) and automatic detection of island and cavern-type landscapes, and is thus preferred over the hardcoded patches.
+
 **ReSolution v0.2** and newer (also known as "ReSolutionDD") add ability to resize (shrink or extend) the game window so that it actually resizes the free screen space available in the game (and doesn't perform bitmap stretching). An additional windowed mode wrapper (wndmode.dll) is needed for this to work: get the windowed bundle.
+
 **ReSolution v0.3** and newer add ability to zoom (in and out) the game environment using your mouse wheel or keyboard so that you can either expand the view or look more closely at the objects that you see. Alt+Enter is also introduced in v0.3, giving the ability to switch from and to borderless fullscreen windowed representation. An additional windowed mode wrapper (wndmode.dll) is needed for this to work: get the windowed bundle.
 
 # Installation
