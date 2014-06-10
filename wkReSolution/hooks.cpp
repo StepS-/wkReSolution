@@ -5,15 +5,14 @@
 #include "madCHook/madCHook.h"
 #pragma comment (lib, "madCHook/madCHook.lib")
 
-HWND W2Wnd;
-HHOOK wHook;
+HHOOK wHook, kHook, mHook;
 LPDIRECTDRAW DDObj;
 LPDIRECTDRAWSURFACE GDISurf;
-PVOID W2DDHookStart, W2DDHookNext;
 PVOID W2DDSizeStruct;
 BOOL ModifiedSurfaces;
 
 SHORT TWidth, THeight, LastWidth, LastHeight;
+DOUBLE DTWidth, DTHeight, DDif;
 
 __declspec(naked) void EndMadHook()
 {
@@ -57,18 +56,91 @@ __declspec(naked) void W2DDInitHook()
 		call EndMadHook
 		mov [W2DDSizeStruct], eax
 		call UpdateW2DDSizeStruct
-		jmp W2DDHookNext
+		jmp W2DDInitNext
 	}
+}
+
+__declspec(naked) void W2DDCreateHook()
+{
+	__asm
+	{
+		call EndMadHook
+		push ebx
+		mov ebx, [esi+30h]
+		mov [DDObj], ebx
+		pop ebx
+		jmp W2DDCreateNext
+	}
+}
+
+BOOL DZoom(DOUBLE& dCX, DOUBLE& dCY, DOUBLE dDif, SHORT sDelta)
+{
+	BOOL result = 0;
+
+	DOUBLE ddCX = dCX + sDelta;
+	DOUBLE ddCY = dCY + sDelta * dDif;
+
+	if ((sDelta > 0 && ddCX <= 32767 && ddCY <= 32767) || (sDelta < 0 && ddCX >= WinMinWidth && ddCY > 0))
+	{
+		dCX = ddCX;
+		dCY = ddCY;
+		result = 1;
+	}
+	return result;
+}
+
+BOOL ReNormalizeBuffers()
+{
+	BOOL result = 0;
+
+	SHORT width, height;
+	GetW2WndSize(width, height);
+
+	if (HandleBufferResize(width, height))
+	{
+		DTWidth = width;
+		DTHeight = height;
+		DDif = DTHeight / DTWidth;
+		result = 1;
+	}
+
+	return result;
+}
+
+BOOL HandleBufferResize(SHORT nWidth, SHORT nHeight, bool bRedraw)
+{
+	BOOL result = 0;
+
+	if (DDObj && nWidth > 0 && nHeight > 0)
+	{
+		TWidth = nWidth;
+		THeight = nHeight;
+		ModifiedSurfaces = 0;
+		if (LastWidth != TWidth || LastHeight != THeight)
+		if (SUCCEEDED(DDObj->EnumSurfaces(DDENUMSURFACES_DOESEXIST | DDENUMSURFACES_ALL, NULL, GDISurf, EnumResize)))
+		{
+			LastWidth = TWidth;
+			LastHeight = THeight;
+			PatchMem(TWidth, THeight, true);
+			if (W2DDSizeStruct)
+				UpdateW2DDSizeStruct();
+			if (ModifiedSurfaces && (ProgressiveResize || bRedraw))
+				RenderGame(); //Experimental: rerender the scene right after resizing
+			result = 1;
+		}
+	}
+
+	return result;
 }
 
 //HACK
 HRESULT WINAPI EnumResize(LPDIRECTDRAWSURFACE pSurface, LPDDSURFACEDESC lpSurfaceDesc, LPVOID lpContext)
 {
-	BOOL bRequiredSurface  = (!CVal(lpSurfaceDesc->dwFlags, DDSD_CKSRCBLT) && lpSurfaceDesc->dwWidth == LastWidth && lpSurfaceDesc->dwHeight == LastHeight);
-	BOOL bThirtyTwoSurface = ( CVal(lpSurfaceDesc->dwFlags, DDSD_CKSRCBLT) && lpSurfaceDesc->dwWidth == LastWidth && lpSurfaceDesc->dwHeight == 32);
-	BOOL bPrimary          = ( CVal(lpSurfaceDesc->ddsCaps.dwCaps, DDSCAPS_PRIMARYSURFACE));
+	BOOL bRequiredSurface  = (!!!(lpSurfaceDesc->dwFlags & DDSD_CKSRCBLT) && lpSurfaceDesc->dwWidth == LastWidth && lpSurfaceDesc->dwHeight == LastHeight);
+//	BOOL bThirtyTwoSurface = ( !!(lpSurfaceDesc->dwFlags & DDSD_CKSRCBLT) && lpSurfaceDesc->dwWidth == LastWidth && lpSurfaceDesc->dwHeight == 32);
+	BOOL bPrimary          = ( !!(lpSurfaceDesc->ddsCaps.dwCaps & DDSCAPS_PRIMARYSURFACE));
 
-	if ((bRequiredSurface || bThirtyTwoSurface) && !bPrimary)
+	if (bRequiredSurface && !bPrimary)
 	{
 		LONG lsz  = sizeof(LONG);
 		LONG lmod = 8;
@@ -93,9 +165,6 @@ HRESULT WINAPI EnumResize(LPDIRECTDRAWSURFACE pSurface, LPDDSURFACEDESC lpSurfac
 
 		HLOCAL MemAlloc = LocalHandle((LPCVOID)(*lpSurfMemAddr - lsz * 2));
 
-		if (bThirtyTwoSurface)
-			dwNewMemSize = dwNewPitch * 32;
-
 		if (MemAlloc = LocalReAlloc(MemAlloc, dwNewMemSize + lsz * 2, LMEM_MOVEABLE))
 		{
 			PVOID NewMemPtr = LocalLock(MemAlloc);
@@ -107,19 +176,12 @@ HRESULT WINAPI EnumResize(LPDIRECTDRAWSURFACE pSurface, LPDDSURFACEDESC lpSurfac
 			*lpInfoPitch    = dwNewPitch;
 			*lpInfoMemAddr  = *lpSurfMemAddr;
 
-			if (!bThirtyTwoSurface)
-			{
-				*lpDataHeight = THeight;
-				*lpInfoHeight = THeight;
+			*lpDataHeight = THeight;
+			*lpInfoHeight = THeight;
 
-				//cleaning the excess picture data
-				GetTargetScreenSize(TWidth, THeight);
-				if (TargetHeight < THeight)
-					memset((PVOID)(*lpSurfMemAddr + dwNewPitch*TargetHeight), 0, dwNewPitch * (THeight - TargetHeight));
-				if (TargetWidth < TWidth)
-				for (int i = 0; i < TargetHeight; i++)
-					memset((PVOID)(*lpSurfMemAddr + i*dwNewPitch + TargetWidth*dwOldPitchM), 0, dwNewPitch - TargetWidth*dwOldPitchM);
-			}
+			//cleanup
+			memset((PVOID)(*lpSurfMemAddr), 0, dwNewMemSize);
+
 			ModifiedSurfaces++;
 			LocalUnlock(MemAlloc);
 		}
@@ -127,7 +189,7 @@ HRESULT WINAPI EnumResize(LPDIRECTDRAWSURFACE pSurface, LPDDSURFACEDESC lpSurfac
 	return DDENUMRET_OK;
 }
 
-LRESULT __declspec(dllexport) CALLBACK CallWndProc(int nCode, WPARAM wParam, LPARAM lParam)
+LRESULT CALLBACK CallWndProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
 	if (nCode == HC_ACTION)
 	{
@@ -137,32 +199,10 @@ LRESULT __declspec(dllexport) CALLBACK CallWndProc(int nCode, WPARAM wParam, LPA
 			if (pwp->hwnd == W2Wnd)
 			{
 				LPWINDOWPOS lwp = (LPWINDOWPOS)(pwp->lParam);
-				if (!CVal(lwp->flags, SWP_NOSIZE) && !CVal(lwp->flags, SWP_NOCOPYBITS) && !CVal(lwp->flags, SWP_NOSENDCHANGING))
+				if (!!!(lwp->flags & SWP_NOSIZE) && !!!(lwp->flags & SWP_NOCOPYBITS) && !!!(lwp->flags & SWP_NOSENDCHANGING))
 				if (DDObj)
 				if (SUCCEEDED(DDObj->GetGDISurface(&GDISurf)))
-				{
-					RECT W2rect;
-					GetClientRect(W2Wnd, &W2rect);
-					SHORT width = (SHORT)(W2rect.right - W2rect.left);
-					SHORT height = (SHORT)(W2rect.bottom - W2rect.top);
-					if (width > 0 && height > 0)
-					{
-						TWidth = width;
-						THeight = height;
-						ModifiedSurfaces = 0;
-						if (LastWidth != TWidth || LastHeight != THeight)
-						if (SUCCEEDED(DDObj->EnumSurfaces(DDENUMSURFACES_DOESEXIST | DDENUMSURFACES_ALL, NULL, GDISurf, EnumResize)))
-						{
-							LastWidth = TWidth;
-							LastHeight = THeight;
-							PatchMem(TWidth, THeight);
-							if (W2DDSizeStruct)
-								UpdateW2DDSizeStruct();
-							if (ModifiedSurfaces && ProgressiveResize)
-								RenderGame(); //Experimental: rerender the scene right after resizing
-						}
-					}
-				}
+					ReNormalizeBuffers();
 			}
 		}
 	}
@@ -170,41 +210,110 @@ LRESULT __declspec(dllexport) CALLBACK CallWndProc(int nCode, WPARAM wParam, LPA
 	return CallNextHookEx(wHook, nCode, wParam, lParam);
 }
 
-HRESULT(WINAPI *DirectDrawCreateNext)(GUID FAR *lpGUID, LPDIRECTDRAW FAR *lplpDD, IUnknown FAR *pUnkOuter);
-HRESULT WINAPI DirectDrawCreateHook(GUID FAR *lpGUID, LPDIRECTDRAW FAR *lplpDD, IUnknown FAR *pUnkOuter)
+LRESULT CALLBACK MouseProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
-	HRESULT result = DirectDrawCreateNext(lpGUID, lplpDD, pUnkOuter);
-	if (SUCCEEDED(result))
-		DDObj = (LPDIRECTDRAW)(*lplpDD);
-	return result;
+	if (nCode == HC_ACTION)
+	{
+		if (wParam == WM_MOUSEWHEEL)
+		{
+			LPMOUSEHOOKSTRUCTEX lpWheelInf = (LPMOUSEHOOKSTRUCTEX)lParam;
+			SHORT sDelta = HIWORD(lpWheelInf->mouseData);
+			if (sDelta != 0)
+			{
+				if (DZoom(DTWidth, DTHeight, DDif, -sDelta))
+					HandleBufferResize((SHORT)DTWidth, (SHORT)DTHeight);
+			}
+		}
+		else if (wParam == WM_MBUTTONDOWN)
+		{
+			ReNormalizeBuffers();
+		}
+	}
+	return CallNextHookEx(mHook, nCode, wParam, lParam);
 }
 
-HWND(WINAPI *CreateWindowExANext)(DWORD dwExStyle, LPCSTR lpClassName, LPCSTR lpWindowName, DWORD dwStyle, int x, int y,
-	int nWidth, int nHeight, HWND hWndParent, HMENU hMenu, HINSTANCE hInstance, LPVOID lpParam);
-HWND WINAPI CreateWindowExAHook(DWORD dwExStyle, LPCSTR lpClassName, LPCSTR lpWindowName, DWORD dwStyle, int x, int y,
-	int nWidth, int nHeight, HWND hWndParent, HMENU hMenu, HINSTANCE hInstance, LPVOID lpParam)
+LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
-	HWND Wnd = CreateWindowExANext(dwExStyle, lpClassName, lpWindowName, dwStyle, x, y, nWidth, nHeight, hWndParent, hMenu, hInstance, lpParam);
-	if (lpClassName && !W2Wnd)
-	if (!strcmp(lpClassName, "worms2"))
-		W2Wnd = Wnd;
-	return Wnd;
+	PBYTE kstate = 0;
+
+	if (HC_ACTION == nCode)
+	{
+		if (!!!(lParam & INT_MIN)) //key is in a held state
+		{
+			if (UseKeyboardZoom)
+			{
+				if (wParam == 109) // Num -
+				{
+					do if (DZoom(DTWidth, DTHeight, DDif, 8))
+						HandleBufferResize((SHORT)DTWidth, (SHORT)DTHeight, true);
+					else break;
+					while (KeyPressed(109));
+				}
+
+				else if (wParam == 107) // Num +
+				{
+					do if (DZoom(DTWidth, DTHeight, DDif, -8))
+						HandleBufferResize((SHORT)DTWidth, (SHORT)DTHeight, true);
+					else break;
+					while (KeyPressed(107));
+				}
+
+				else if (wParam == VK_END) // End
+				{
+					ReNormalizeBuffers();
+				}
+			}
+
+			if (AltEnter)
+			{
+				if (wParam == VK_RETURN)
+				{
+					if (!!(lParam & 0x20000000) && DDObj) //Alt is pressed and DD is there
+					{
+						SHORT width, height;
+						GetW2WndSize(width, height);
+
+						if (width >= ScreenCX && height >= ScreenCY)
+							DDObj->SetDisplayMode(AeWidth, AeHeight, 0);
+						else
+						{
+							AeWidth = width;
+							AeHeight = height;
+							DDObj->SetDisplayMode(ScreenCX, ScreenCY, 0);
+						}
+
+						ReNormalizeBuffers();
+					}
+				}
+			}
+		}
+	}
+	return CallNextHookEx(kHook, nCode, wParam, lParam);
 }
 
 void InstallHooks()
 {
-	if (AllowResize)
+	if (AllowResize || AllowZoom)
 	{
-		wHook = SetWindowsHookEx(WH_CALLWNDPROC, (HOOKPROC)CallWndProc, 0, GetCurrentThreadId());
-		HookAPI("ddraw.dll", "DirectDrawCreate", DirectDrawCreateHook, (PVOID*)&DirectDrawCreateNext, 0);
-		HookAPI("user32.dll", "CreateWindowExA", CreateWindowExAHook, (PVOID*)&CreateWindowExANext, 0);
+		if (AllowResize)
+		{
+			if (!wHook) wHook = SetWindowsHookEx(WH_CALLWNDPROC, (HOOKPROC)CallWndProc, 0, GetCurrentThreadId());
+			if (AltEnter && !kHook) kHook = SetWindowsHookEx(WH_KEYBOARD, (HOOKPROC)KeyboardProc, 0, GetCurrentThreadId());
+		}
+		if (AllowZoom)
+		{
+			if (UseKeyboardZoom && !kHook) kHook = SetWindowsHookEx(WH_KEYBOARD, (HOOKPROC)KeyboardProc, 0, GetCurrentThreadId());
+			if (UseMouseWheel   && !mHook) mHook = SetWindowsHookEx(WH_MOUSE, (HOOKPROC)MouseProc, 0, GetCurrentThreadId());
+		}
+		HookCode(W2DDCreateStart, W2DDCreateHook, (PVOID*)&W2DDCreateNext, 0);
 	}
-	HookCode(W2DDHookStart, W2DDInitHook, (PVOID*)&W2DDHookNext, 0);
+	HookCode(W2DDInitStart, W2DDInitHook, (PVOID*)&W2DDInitNext, 0);
 }
 
 void UninstallHooks()
 {
-	if (AllowResize)
-		UnhookWindowsHookEx(wHook);
+	if (wHook) UnhookWindowsHookEx(wHook);
+	if (kHook) UnhookWindowsHookEx(kHook);
+	if (mHook) UnhookWindowsHookEx(mHook);
 	FinalizeMadCHook();
 }

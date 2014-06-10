@@ -2,6 +2,7 @@
 #define WIN32_LEAN_AND_MEAN
 
 #include <windows.h>
+#include <stdio.h>
 #include "main.h"
 #include "hooks.h"
 #include "w2res.h"
@@ -11,37 +12,52 @@ void LoadConfig()
 {
 	GetPathUnderExeA(Config, "W2.ini");
 
-	SWidth = GetPrivateProfileIntA("Resolution", "ScreenWidth", -1, Config);
-	SHeight = GetPrivateProfileIntA("Resolution", "ScreenHeight", -1, Config);
-	AllowResize = GetPrivateProfileIntA("Resolution", "AllowResize", -1, Config);
-	ProgressiveResize = GetPrivateProfileIntA("Resolution", "ProgressiveResize", -1, Config);
+	ScreenCX = (SHORT)GetSystemMetrics(SM_CXSCREEN);
+	ScreenCY = (SHORT)GetSystemMetrics(SM_CYSCREEN);
+
+	WinMinWidth = GetSystemMetrics(SM_CXMIN) - GetSystemMetrics(SM_CXSIZEFRAME) * 2;
+
+	SWidth                = GetPrivateProfileIntA("Resolution", "ScreenWidth", -1, Config);
+	SHeight               = GetPrivateProfileIntA("Resolution", "ScreenHeight", -1, Config);
 	OfflineCavernFloodFix = GetPrivateProfileIntA("Resolution", "OfflineCavernFloodFix", -1, Config);
 
-	ScreenX = (SHORT)GetSystemMetrics(SM_CXSCREEN);
-	ScreenY = (SHORT)GetSystemMetrics(SM_CYSCREEN);
+	AllowResize           = GetPrivateProfileIntA("Resizing", "Enable", -1, Config);
+	ProgressiveResize     = GetPrivateProfileIntA("Resizing", "ProgressiveUpdate", -1, Config);
+	AltEnter              = GetPrivateProfileIntA("Resizing", "AltEnter", -1, Config);
+
+	AllowZoom             = GetPrivateProfileIntA("Zooming", "Enable", -1, Config);
+	UseMouseWheel         = GetPrivateProfileIntA("Zooming", "UseMouseWheel", -1, Config);
+	UseKeyboardZoom       = GetPrivateProfileIntA("Zooming", "UseKeyboardZoom", -1, Config);
+
+	if (SWidth <= 0 || SHeight <= 0)
+	{
+		WritePrivateProfileIntA("Resolution", "ScreenWidth", SWidth = ScreenCX, Config);
+		WritePrivateProfileIntA("Resolution", "ScreenHeight", SHeight = ScreenCY, Config);
+	}
 
 	if (OfflineCavernFloodFix < 0)
 		WritePrivateProfileIntA("Resolution", "OfflineCavernFloodFix", OfflineCavernFloodFix = 1, Config);
 	if (AllowResize < 0)
-		WritePrivateProfileIntA("Resolution", "AllowResize", AllowResize = 1, Config);
+		WritePrivateProfileIntA("Resizing", "Enable", AllowResize = 1, Config);
 	if (ProgressiveResize < 0)
-		WritePrivateProfileIntA("Resolution", "ProgressiveResize", ProgressiveResize = 1, Config);
+		WritePrivateProfileIntA("Resizing", "ProgressiveUpdate", ProgressiveResize = 1, Config);
+	if (AltEnter < 0)
+		WritePrivateProfileIntA("Resizing", "AltEnter", AltEnter = 1, Config);
+	if (AllowZoom < 0)
+		WritePrivateProfileIntA("Zooming", "Enable", AllowZoom = 1, Config);
+	if (UseMouseWheel < 0)
+		WritePrivateProfileIntA("Zooming", "UseMouseWheel", UseMouseWheel = 1, Config);
+	if (UseKeyboardZoom < 0)
+		WritePrivateProfileIntA("Zooming", "UseKeyboardZoom", UseKeyboardZoom = 1, Config);
 
-	if (SWidth <= 0 || SHeight <= 0)
-	{
-		WritePrivateProfileIntA("Resolution", "ScreenWidth", SWidth = ScreenX, Config);
-		WritePrivateProfileIntA("Resolution", "ScreenHeight", SHeight = ScreenY, Config);
-	}
+	TargetWidth = SWidth;  TargetHeight = SHeight;
+	LastWidth   = SWidth;  LastHeight   = SHeight;
+	TWidth      = SWidth;  THeight      = SHeight;
+	DTWidth     = SWidth;  DTHeight     = SHeight;
+	DDif = DTHeight / DTWidth;
 
-	TargetWidth = SWidth;
-	TargetHeight = SHeight;
-	LastWidth = SWidth;
-	LastHeight = SHeight;
-	TWidth = SWidth;
-	THeight = SHeight;
-
-	W2DDHookStart = (PVOID)MemOffset(0x33E9F);
-	RenderGame    = (PFVOID)MemOffset(0x34750);
+	AeWidth  = (SHORT)(DTWidth / 1.5);
+	AeHeight = (SHORT)(DTHeight / 1.5);
 
 	if (OfflineCavernFloodFix)
 		GlobalEatLimit = 854;
@@ -49,9 +65,9 @@ void LoadConfig()
 		GlobalEatLimit = 480;
 }
 
-BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
+BOOL APIENTRY DllMain(HMODULE hModule, DWORD dwReason, LPVOID lpReserved)
 {
-	if (ul_reason_for_call == DLL_PROCESS_ATTACH)
+	if (dwReason == DLL_PROCESS_ATTACH)
 	{
 		if (!CheckVersion())
 		{
@@ -70,7 +86,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 		InstallHooks();
 
 	}
-	else if (ul_reason_for_call == DLL_PROCESS_DETACH)
+	else if (dwReason == DLL_PROCESS_DETACH)
 	{
 		UninstallHooks();
 	}

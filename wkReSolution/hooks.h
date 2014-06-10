@@ -3,21 +3,25 @@
 
 #include <ddraw.h>
 
+#define KeyPressed(k) (!!(GetAsyncKeyState(k) & 0x8000))
+
 void EndMadHook();
 void UpdateW2DDSizeStruct();
 void W2DDInitHook();
 void InstallHooks();
 void UninstallHooks();
 
+BOOL DZoom(DOUBLE& dCX, DOUBLE& dCY, DOUBLE dDif, SHORT sDelta);
+BOOL HandleBufferResize(SHORT nWidth, SHORT nHeight, bool bRedraw = 0);
+
+BOOL ReNormalizeBuffers(void);
 HRESULT WINAPI EnumResize(LPDIRECTDRAWSURFACE, LPDDSURFACEDESC, LPVOID);
 LRESULT __declspec(dllexport) CALLBACK CallWndProc(int, WPARAM, LPARAM);
-HRESULT WINAPI DirectDrawCreateHook(GUID*, LPDIRECTDRAW*, IUnknown*);
-HWND WINAPI CreateWindowExAHook(DWORD, LPCSTR, LPCSTR, DWORD, int, int, int, int, HWND, HMENU, HINSTANCE, LPVOID);
 
 extern HRESULT(WINAPI *DirectDrawCreateNext)(GUID*, LPDIRECTDRAW*, IUnknown*);
-extern HWND(WINAPI *CreateWindowExANext)(DWORD, LPCSTR, LPCSTR, DWORD, int, int, int, int, HWND, HMENU, HINSTANCE, LPVOID);
 extern SHORT TWidth, THeight, LastWidth, LastHeight;
-extern PVOID W2DDHookStart, W2DDHookNext;
+extern DOUBLE DTWidth, DTHeight, DDif;
+extern PVOID W2DDCreateStart;
+extern PVOID W2CWindowStart;
 
-#define CVal(num, val) (!!(num & val))
 #define RoundUp(num, mod) (num + (mod * ((num % mod) != 0) - (num % mod)))

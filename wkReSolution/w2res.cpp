@@ -8,9 +8,14 @@ bool Cavern;
 BYTE Version;
 CHAR Config[MAX_PATH], LandFile[MAX_PATH];
 
+HWND* pW2Wnd;
+
+SHORT WinMinWidth;
 SHORT SWidth, SHeight, GlobalEatLimit, TargetWidth, TargetHeight;
-SHORT ScreenX, ScreenY;
-BOOL OfflineCavernFloodFix, AllowResize, ProgressiveResize;
+SHORT ScreenCX, ScreenCY, AeWidth, AeHeight;
+BOOL OfflineCavernFloodFix;
+BOOL AllowResize, ProgressiveResize, AltEnter;
+BOOL AllowZoom, UseKeyboardZoom, UseMouseWheel;
 DWORD ActualWidth, HorizontalSidesBox, RenderFromLeft;
 DWORD LandWaterCriticalZone, CavernWaterEatLimit, ActualHeight, HUnk4, HUnk5, RenderFromTop, VerticalSidesBox;
 DWORD LeftOffset, CenterCursorX, CenterCursorY;
@@ -18,6 +23,8 @@ DWORD AL_WUnk2, AL_HorizontalSidesBox, AL_RenderFromLeft, AL_RenderFromTop, AL_T
 DWORD TopOffset;
 
 PFVOID RenderGame;
+PVOID W2DDInitStart, W2DDInitNext;
+PVOID W2DDCreateStart, W2DDCreateNext;
 
 BYTE CheckVersion()
 {
@@ -47,6 +54,22 @@ BOOL CavernCheck()
 		MB_OK | MB_ICONWARNING);
 
 	return Cavern;
+}
+
+BOOL GetW2WndSize(SHORT& sWidth, SHORT& sHeight)
+{
+	BOOL result = 0;
+	if (IsWindow(W2Wnd))
+	{
+		RECT W2rect;
+		if (GetClientRect(W2Wnd, &W2rect))
+		{
+			sWidth = (SHORT)(W2rect.right - W2rect.left);
+			sHeight = (SHORT)(W2rect.bottom - W2rect.top);
+			result = 1;
+		}
+	}
+	return result;
 }
 
 void GetTargetScreenSize(SHORT nWidth, SHORT nHeight)
@@ -91,8 +114,13 @@ void GetAddresses()
 
 	//new things discovered by StepS
 
-	CenterCursorX = 0x00077878 + MemOffset(0x1C00);
-	CenterCursorY = 0x0007787C + MemOffset(0x1C00);
+	CenterCursorX   = 0x00077878 + MemOffset(0x1C00);
+	CenterCursorY   = 0x0007787C + MemOffset(0x1C00);
+
+	W2DDInitStart   = (PVOID)MemOffset(0x33E9F);
+	W2DDCreateStart = (PVOID)MemOffset(0xB484);
+	pW2Wnd          = (HWND*)MemOffset(0x8BCE8);
+	RenderGame      = (PFVOID)MemOffset(0x34750);
 }
 
 void UnprotectAddresses()
@@ -102,7 +130,7 @@ void UnprotectAddresses()
 	Unprotect(TopOffset);
 }
 
-void PatchMem(SHORT nWidth, SHORT nHeight)
+void PatchMem(SHORT nWidth, SHORT nHeight, bool bMouseForWindow)
 {
 	GetTargetScreenSize(nWidth, nHeight);
 
@@ -125,8 +153,19 @@ void PatchMem(SHORT nWidth, SHORT nHeight)
 	*(PWORD)AL_SWUnk1             = TargetWidth / 2;
 	*(PWORD)AL_LeftOffset         = TargetWidth / 2;
 
-	*(PWORD)CenterCursorX = nWidth / 2 > ScreenX / 2 ? ScreenX / 2 : nWidth / 2;
-	*(PWORD)CenterCursorY = nHeight / 2 > ScreenY / 2 ? ScreenY / 2 : nHeight / 2;
+	if (bMouseForWindow && IsWindow(W2Wnd))
+	{
+		SHORT width, height;
+		GetW2WndSize(width, height);
+
+		*(PWORD)CenterCursorX = width / 2 > ScreenCX / 2 ? ScreenCX / 2 : width / 2;
+		*(PWORD)CenterCursorY = height / 2 > ScreenCY / 2 ? ScreenCY / 2 : height / 2;
+	}
+	else
+	{
+		*(PWORD)CenterCursorX = nWidth / 2 > ScreenCX / 2 ? ScreenCX / 2 : nWidth / 2;
+		*(PWORD)CenterCursorY = nHeight / 2 > ScreenCY / 2 ? ScreenCY / 2 : nHeight / 2;
+	}
 
 	//  *(PWORD)HUnk4 = nHeight;
 	//  *(PWORD)HUnk5 = nHeight;
