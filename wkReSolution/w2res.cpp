@@ -9,6 +9,7 @@ BYTE Version;
 CHAR Config[MAX_PATH], LandFile[MAX_PATH];
 
 HWND* pW2Wnd;
+LPW2DDSTRUCT* pW2DS;
 
 SHORT WinMinWidth;
 SHORT SWidth, SHeight, GlobalEatLimit, TargetWidth, TargetHeight;
@@ -23,8 +24,6 @@ DWORD AL_WUnk2, AL_HorizontalSidesBox, AL_RenderFromLeft, AL_RenderFromTop, AL_T
 DWORD TopOffset;
 
 PFVOID RenderGame;
-PVOID W2DDInitStart, W2DDInitNext;
-PVOID W2DDCreateStart, W2DDCreateNext;
 
 BYTE CheckVersion()
 {
@@ -117,9 +116,8 @@ void GetAddresses()
 	CenterCursorX   = 0x00077878 + MemOffset(0x1C00);
 	CenterCursorY   = 0x0007787C + MemOffset(0x1C00);
 
-	W2DDInitStart   = (PVOID)MemOffset(0x33E9F);
-	W2DDCreateStart = (PVOID)MemOffset(0xB484);
 	pW2Wnd          = (HWND*)MemOffset(0x8BCE8);
+	pW2DS           = (LPW2DDSTRUCT*)MemOffset(0x799C4);
 	RenderGame      = (PFVOID)MemOffset(0x34750);
 }
 

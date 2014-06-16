@@ -2,76 +2,12 @@
 #include <windows.h>
 #include "hooks.h"
 #include "w2res.h"
-#include "madCHook/madCHook.h"
-#pragma comment (lib, "madCHook/madCHook.lib")
 
 HHOOK wHook, kHook, mHook;
-LPDIRECTDRAW DDObj;
-LPDIRECTDRAWSURFACE GDISurf;
-PVOID W2DDSizeStruct;
 BOOL ModifiedSurfaces;
 
 SHORT TWidth, THeight, LastWidth, LastHeight;
 DOUBLE DTWidth, DTHeight, DDif;
-
-__declspec(naked) void EndMadHook()
-{
-	__asm
-	{
-		push eax
-		push ebx
-		mov eax, [esp + 0Ch]
-		mov ebx, [eax + 1]
-		mov [esp + 0Ch], ebx
-		lock and dword ptr [eax + 1], 0
-		pop ebx
-		pop eax
-		ret
-	}
-}
-
-__declspec(naked) void UpdateW2DDSizeStruct()
-{
-	__asm
-	{
-		push eax
-		push ebx
-		push ecx
-		mov ax, [TargetWidth]
-		mov bx, [TargetHeight]
-		mov ecx, [W2DDSizeStruct]
-		mov [ecx + 8h], ax
-		mov [ecx + 0Ch], bx
-		pop ecx
-		pop ebx
-		pop eax
-		ret
-	}
-}
-
-__declspec(naked) void W2DDInitHook()
-{
-	__asm
-	{
-		call EndMadHook
-		mov [W2DDSizeStruct], eax
-		call UpdateW2DDSizeStruct
-		jmp W2DDInitNext
-	}
-}
-
-__declspec(naked) void W2DDCreateHook()
-{
-	__asm
-	{
-		call EndMadHook
-		push ebx
-		mov ebx, [esi+30h]
-		mov [DDObj], ebx
-		pop ebx
-		jmp W2DDCreateNext
-	}
-}
 
 BOOL DZoom(DOUBLE& dCX, DOUBLE& dCY, DOUBLE dDif, SHORT sDelta)
 {
@@ -117,13 +53,13 @@ BOOL HandleBufferResize(SHORT nWidth, SHORT nHeight, bool bRedraw)
 		THeight = nHeight;
 		ModifiedSurfaces = 0;
 		if (LastWidth != TWidth || LastHeight != THeight)
-		if (SUCCEEDED(DDObj->EnumSurfaces(DDENUMSURFACES_DOESEXIST | DDENUMSURFACES_ALL, NULL, GDISurf, EnumResize)))
+		if (SUCCEEDED(DDObj->EnumSurfaces(DDENUMSURFACES_DOESEXIST | DDENUMSURFACES_ALL, NULL, NULL, EnumResize)))
 		{
 			LastWidth = TWidth;
 			LastHeight = THeight;
 			PatchMem(TWidth, THeight, true);
-			if (W2DDSizeStruct)
-				UpdateW2DDSizeStruct();
+			W2DS->RenderWidth = TargetWidth;
+			W2DS->RenderHeight = TargetHeight;
 			if (ModifiedSurfaces && (ProgressiveResize || bRedraw))
 				RenderGame(); //Experimental: rerender the scene right after resizing
 			result = 1;
@@ -137,7 +73,6 @@ BOOL HandleBufferResize(SHORT nWidth, SHORT nHeight, bool bRedraw)
 HRESULT WINAPI EnumResize(LPDIRECTDRAWSURFACE pSurface, LPDDSURFACEDESC lpSurfaceDesc, LPVOID lpContext)
 {
 	BOOL bRequiredSurface  = (!!!(lpSurfaceDesc->dwFlags & DDSD_CKSRCBLT) && lpSurfaceDesc->dwWidth == LastWidth && lpSurfaceDesc->dwHeight == LastHeight);
-//	BOOL bThirtyTwoSurface = ( !!(lpSurfaceDesc->dwFlags & DDSD_CKSRCBLT) && lpSurfaceDesc->dwWidth == LastWidth && lpSurfaceDesc->dwHeight == 32);
 	BOOL bPrimary          = ( !!(lpSurfaceDesc->ddsCaps.dwCaps & DDSCAPS_PRIMARYSURFACE));
 
 	if (bRequiredSurface && !bPrimary)
@@ -200,8 +135,6 @@ LRESULT CALLBACK CallWndProc(int nCode, WPARAM wParam, LPARAM lParam)
 			{
 				LPWINDOWPOS lwp = (LPWINDOWPOS)(pwp->lParam);
 				if (!!!(lwp->flags & SWP_NOSIZE) && !!!(lwp->flags & SWP_NOCOPYBITS) && !!!(lwp->flags & SWP_NOSENDCHANGING))
-				if (DDObj)
-				if (SUCCEEDED(DDObj->GetGDISurface(&GDISurf)))
 					ReNormalizeBuffers();
 			}
 		}
@@ -305,9 +238,7 @@ void InstallHooks()
 			if (UseKeyboardZoom && !kHook) kHook = SetWindowsHookEx(WH_KEYBOARD, (HOOKPROC)KeyboardProc, 0, GetCurrentThreadId());
 			if (UseMouseWheel   && !mHook) mHook = SetWindowsHookEx(WH_MOUSE, (HOOKPROC)MouseProc, 0, GetCurrentThreadId());
 		}
-		HookCode(W2DDCreateStart, W2DDCreateHook, (PVOID*)&W2DDCreateNext, 0);
 	}
-	HookCode(W2DDInitStart, W2DDInitHook, (PVOID*)&W2DDInitNext, 0);
 }
 
 void UninstallHooks()
@@ -315,5 +246,4 @@ void UninstallHooks()
 	if (wHook) UnhookWindowsHookEx(wHook);
 	if (kHook) UnhookWindowsHookEx(kHook);
 	if (mHook) UnhookWindowsHookEx(mHook);
-	FinalizeMadCHook();
 }
