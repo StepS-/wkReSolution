@@ -21,7 +21,7 @@ typedef struct
 
 extern bool Cavern;
 extern BYTE Version;
-extern CHAR Config[MAX_PATH], LandFile[MAX_PATH];
+extern CHAR Config[MAX_PATH], LandFile[MAX_PATH], GameFile[MAX_PATH];
 
 extern HWND* pW2Wnd;
 extern LPW2DDSTRUCT* pW2DS;

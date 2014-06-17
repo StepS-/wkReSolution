@@ -6,7 +6,7 @@
 
 bool Cavern;
 BYTE Version;
-CHAR Config[MAX_PATH], LandFile[MAX_PATH];
+CHAR Config[MAX_PATH], LandFile[MAX_PATH], GameFile[MAX_PATH];
 
 HWND* pW2Wnd;
 LPW2DDSTRUCT* pW2DS;
@@ -35,16 +35,30 @@ BYTE CheckVersion()
 
 BOOL CavernCheck()
 {
-	FILE* land;
-	char cavc;
+	FILE *fLand, *fGame;
+	char cavc, borc;
 	Cavern = false;
-	if (fopen_s(&land, GetPathUnderExeA(LandFile, "Data\\land.dat"), "r") == ERROR_SUCCESS)
+	if (fopen_s(&fLand, GetPathUnderExeA(LandFile, "Data\\land.dat"), "r") == ERROR_SUCCESS)
 	{
-		fseek(land, 0x10, SEEK_SET);
-		cavc = fgetc(land);
-		if (cavc)
+		fseek(fLand, 0x10, SEEK_SET);
+		if (cavc = fgetc(fLand))
 			Cavern = true;
-		fclose(land);
+		else
+		{
+			if (fopen_s(&fGame, GetPathUnderExeA(GameFile, "Data\\game.dat"), "r") == ERROR_SUCCESS)
+			{
+				fseek(fGame, 0xC4F, SEEK_SET);
+				if (borc = fgetc(fGame))
+					Cavern = true;
+				fclose(fGame);
+			}
+			else
+				MessageBoxA(NULL,
+				"Warning: failed to open the \"Data\\game.dat\" file. "
+				"Something is bad.", "ReSolution warning",
+				MB_OK | MB_ICONWARNING);
+		}
+		fclose(fLand);
 	}
 	else
 		MessageBoxA(NULL,
