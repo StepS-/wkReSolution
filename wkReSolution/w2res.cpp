@@ -47,7 +47,7 @@ char CheckVersion()
 		return Version = W2_15;
 	else if (PETime >= 0x3AFFFAAB && PETime <= 0x3AFFFBB1)
 		return Version = WWP_11;
-	else if (PETime == 0x3A92A062 && PETime <= 0x3A92A27E)
+	else if (PETime >= 0x3A92A062 && PETime <= 0x3A92A27E)
 		return Version = WWP_10;
 	return Version = 0;
 }
