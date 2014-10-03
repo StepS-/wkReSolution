@@ -3,6 +3,13 @@
 
 #include <ddraw.h>
 
+#define WWP (Version < 0)
+#define W2 (Version > 0)
+
+#define W2_15 1
+#define WWP_10 -1
+#define WWP_11 -2
+
 typedef void(*PFVOID)();
 typedef struct
 {
@@ -19,28 +26,49 @@ typedef struct
 	LPDIRECTDRAW lpDD;
 } W2DDSTRUCT, *LPW2DDSTRUCT;
 
+typedef struct
+{
+	DWORD X, Y;
+} LCOORD, *LPLCOORD;
+
 extern bool Cavern;
-extern BYTE Version;
+extern char Version;
 extern CHAR Config[MAX_PATH], LandFile[MAX_PATH], GameFile[MAX_PATH];
 
-extern HWND* pW2Wnd;
+extern HWND* pWormsWnd;
 extern LPW2DDSTRUCT* pW2DS;
-#define W2Wnd (*pW2Wnd)
+extern LPDIRECTDRAW2* wwpDD;
+extern HWND* pT17Wnd;
+extern PVOID* WWPCurPosStruct;
+extern BOOL* pWWPInGame;
 #define W2DS (*pW2DS)
-#define DDObj (W2DS->lpDD)
+#define T17Wnd (*pT17Wnd)
 
-extern SHORT WinMinWidth;
-extern SHORT SWidth, SHeight, GlobalEatLimit, TargetWidth, TargetHeight;
-extern SHORT ScreenCX, ScreenCY, AeWidth, AeHeight;
+extern DWORD WinMinWidth;
+extern DWORD SWidth, SHeight, GlobalEatLimit, TargetWidth, TargetHeight;
+extern DWORD ScreenCX, ScreenCY, AeWidth, AeHeight;
 extern BOOL OfflineCavernFloodFix;
 extern BOOL AllowResize, ProgressiveResize, AltEnter;
-extern BOOL AllowZoom, UseKeyboardZoom, UseMouseWheel;
+extern BOOL AllowZoom, UseKeyboardZoom, UseMouseWheel, UseTouchscreenZoom;
 extern PFVOID RenderGame;
 
-BYTE CheckVersion();
-BOOL CavernCheck();
-BOOL GetW2WndSize(SHORT& sWidth, SHORT& sHeight);
-void GetTargetScreenSize(SHORT nWidth, SHORT nHeight);
-void GetAddresses();
-void UnprotectAddresses();
-void PatchMem(SHORT nWidth, SHORT nHeight, bool bMouseForWindow = false);
+LPDIRECTDRAW DDObj();
+BOOL InGame();
+HWND WormsWnd();
+HWND InputWnd();
+LPLCOORD GCursPos();
+char CheckVersion();
+void CavernCheck();
+BOOL GetWndSize(HWND hWnd, DWORD& sWidth, DWORD& sHeight);
+void GetTargetScreenSize(DWORD nWidth, DWORD nHeight);
+void PrepareAddresses();
+void PatchW2Mem(DWORD nWidth, DWORD nHeight, bool bMouseForWindow = false);
+
+BOOL UpdateCenteredCursor(DWORD nWidth, DWORD nHeight, bool bMouseForWindow = false);
+void SetWWPRenderingDimensions(DWORD nWidth, DWORD nHeight, bool bMouseForWindow = false);
+void ProcessW2Waterrise();
+void ProcessWWPWater();
+void ProcessWWPWaterInit();
+void ProcessWWPWaterInitCont();
+void ProcessWWPWaterRise();
+void ProcessDDStartup();

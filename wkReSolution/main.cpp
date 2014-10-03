@@ -10,7 +10,7 @@
 
 void LoadConfig()
 {
-	GetPathUnderExeA(Config, "W2.ini");
+	GetPathUnderModuleA(HINST_THISCOMPONENT, Config, "ReSolution.ini");
 
 	ScreenCX = (SHORT)GetSystemMetrics(SM_CXSCREEN);
 	ScreenCY = (SHORT)GetSystemMetrics(SM_CYSCREEN);
@@ -19,24 +19,24 @@ void LoadConfig()
 
 	SWidth                = GetPrivateProfileIntA("Resolution", "ScreenWidth", -1, Config);
 	SHeight               = GetPrivateProfileIntA("Resolution", "ScreenHeight", -1, Config);
-	OfflineCavernFloodFix = GetPrivateProfileIntA("Resolution", "OfflineCavernFloodFix", -1, Config);
 
 	AllowResize           = GetPrivateProfileIntA("Resizing", "Enable", -1, Config);
-	ProgressiveResize     = GetPrivateProfileIntA("Resizing", "ProgressiveUpdate", -1, Config);
 	AltEnter              = GetPrivateProfileIntA("Resizing", "AltEnter", -1, Config);
 
 	AllowZoom             = GetPrivateProfileIntA("Zooming", "Enable", -1, Config);
 	UseMouseWheel         = GetPrivateProfileIntA("Zooming", "UseMouseWheel", -1, Config);
 	UseKeyboardZoom       = GetPrivateProfileIntA("Zooming", "UseKeyboardZoom", -1, Config);
+	UseTouchscreenZoom    = GetPrivateProfileIntA("Zooming", "UseTouchscreenZoom", -1, Config);
 
-	if (SWidth <= 0 || SHeight <= 0)
+	if (!WWP)
+		ProgressiveResize = GetPrivateProfileIntA("Resizing", "ProgressiveUpdate", -1, Config);
+
+	if (SWidth > 32767 || SHeight > 32767 || SWidth == 0 || SHeight == 0)
 	{
 		WritePrivateProfileIntA("Resolution", "ScreenWidth", SWidth = ScreenCX, Config);
 		WritePrivateProfileIntA("Resolution", "ScreenHeight", SHeight = ScreenCY, Config);
 	}
 
-	if (OfflineCavernFloodFix < 0)
-		WritePrivateProfileIntA("Resolution", "OfflineCavernFloodFix", OfflineCavernFloodFix = 1, Config);
 	if (AllowResize < 0)
 		WritePrivateProfileIntA("Resizing", "Enable", AllowResize = 1, Config);
 	if (ProgressiveResize < 0)
@@ -56,33 +56,30 @@ void LoadConfig()
 	DTWidth     = SWidth;  DTHeight     = SHeight;
 	DDif = DTHeight / DTWidth;
 
-	AeWidth  = (SHORT)(DTWidth / 1.5);
-	AeHeight = (SHORT)(DTHeight / 1.5);
-
-	if (OfflineCavernFloodFix)
-		GlobalEatLimit = 854;
-	else
-		GlobalEatLimit = 480;
+	AeWidth  = (DWORD)(DTWidth / 1.5);
+	AeHeight = (DWORD)(DTHeight / 1.5);
 }
 
-BOOL APIENTRY DllMain(HMODULE hModule, DWORD dwReason, LPVOID lpReserved)
+BOOL APIENTRY DllMain(HMODULE, DWORD dwReason, LPVOID)
 {
 	if (dwReason == DLL_PROCESS_ATTACH)
 	{
 		if (!CheckVersion())
 		{
 			MessageBoxA(NULL,
-				"Sorry, but your Worms2.exe version has to be 1.05 for wkReSolution to work. "
-				"Please patch your game to 1.05 and try again.", "ReSolution error",
+				"Sorry, but your game version is not compatible with this wkReSolution HD module. "
+				"Please check that the game is patched to one of either:\nWWP: 1.01 (EU SP1) or 1.00\nWorms 2: 1.05", "ReSolution error",
 				MB_OK | MB_ICONERROR);
 			return 1;
 		}
 
 		LoadConfig();
-		CavernCheck();
-		GetAddresses();
-		UnprotectAddresses();
-		PatchMem(SWidth, SHeight);
+		PrepareAddresses();
+		if (!WWP)
+		{
+			CavernCheck();
+			PatchW2Mem(SWidth, SHeight);
+		}
 		InstallHooks();
 
 	}

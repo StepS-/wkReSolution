@@ -1,54 +1,75 @@
 
 #include <windows.h>
 #include <stdio.h>
+#include "hooks.h"
 #include "w2res.h"
 #include "misc_tools.h"
 
 bool Cavern;
-BYTE Version;
+char Version;
+PEInfo EXE;
 CHAR Config[MAX_PATH], LandFile[MAX_PATH], GameFile[MAX_PATH];
 
-HWND* pW2Wnd;
+HWND* pWormsWnd;
 LPW2DDSTRUCT* pW2DS;
+LPLCOORD W2PosCoord;
 
-SHORT WinMinWidth;
-SHORT SWidth, SHeight, GlobalEatLimit, TargetWidth, TargetHeight;
-SHORT ScreenCX, ScreenCY, AeWidth, AeHeight;
+DWORD WinMinWidth;
+DWORD SWidth, SHeight, TargetWidth, TargetHeight;
+DWORD ScreenCX, ScreenCY, AeWidth, AeHeight;
+DWORD GlobalEatLimit;
+
 BOOL OfflineCavernFloodFix;
 BOOL AllowResize, ProgressiveResize, AltEnter;
-BOOL AllowZoom, UseKeyboardZoom, UseMouseWheel;
+BOOL AllowZoom, UseKeyboardZoom, UseMouseWheel, UseTouchscreenZoom;
 DWORD ActualWidth, HorizontalSidesBox, RenderFromLeft;
 DWORD LandWaterCriticalZone, CavernWaterEatLimit, ActualHeight, HUnk4, HUnk5, RenderFromTop, VerticalSidesBox;
-DWORD LeftOffset, CenterCursorX, CenterCursorY;
+DWORD LeftOffset;
 DWORD AL_WUnk2, AL_HorizontalSidesBox, AL_RenderFromLeft, AL_RenderFromTop, AL_TopInfidelBox, AL_SWUnk1, AL_LeftOffset;
 DWORD TopOffset;
 
+DWORD WidthNow, HeightNow;
+DWORD WWPDDinit, WWPDDterm;
+LPDIRECTDRAW2* wwpDD;
+HWND* pT17Wnd;
+BOOL* pWWPInGame;
+PVOID* WWPCurPosStruct;
+
+DWORD WateredScreenHeight;
+DWORD MapWidth = 1920, MapHeight = 696;
+
 PFVOID RenderGame;
 
-BYTE CheckVersion()
+char CheckVersion()
 {
-	DWORD PETime = GetPETimestampA(0);
+	DWORD PETime = EXE.FH->TimeDateStamp;
 	if (PETime >= 0x352118A5 && PETime <= 0x352118FD)
-		return Version = 1;
+		return Version = W2_15;
+	else if (PETime >= 0x3AFFFAAB && PETime <= 0x3AFFFBB1)
+		return Version = WWP_11;
+	else if (PETime == 0x3A92A062 && PETime <= 0x3A92A27E)
+		return Version = WWP_10;
 	return Version = 0;
 }
 
-BOOL CavernCheck()
+void CavernCheck()
 {
 	FILE *fLand, *fGame;
-	char cavc, borc;
+	int cavc, borc;
 	Cavern = false;
-	if (fopen_s(&fLand, GetPathUnderExeA(LandFile, "Data\\land.dat"), "r") == ERROR_SUCCESS)
+	if (fopen_s(&fLand, GetPathUnderModuleA(NULL, LandFile, "Data\\land.dat"), "r") == ERROR_SUCCESS)
 	{
-		fseek(fLand, 0x10, SEEK_SET);
-		if (cavc = fgetc(fLand))
+		fseek(fLand, 0x08, SEEK_SET);
+		fread_s(&MapWidth, 4, 4, 1, fLand);
+		fread_s(&MapHeight, 4, 4, 1, fLand);
+		if ((cavc = fgetc(fLand)) != 0)
 			Cavern = true;
-		else
+		else if (!WWP)
 		{
-			if (fopen_s(&fGame, GetPathUnderExeA(GameFile, "Data\\game.dat"), "r") == ERROR_SUCCESS)
+			if (fopen_s(&fGame, GetPathUnderModuleA(NULL, GameFile, "Data\\game.dat"), "r") == ERROR_SUCCESS)
 			{
 				fseek(fGame, 0xC4F, SEEK_SET);
-				if (borc = fgetc(fGame))
+				if ((borc = fgetc(fGame)) != 0)
 					Cavern = true;
 				fclose(fGame);
 			}
@@ -58,6 +79,29 @@ BOOL CavernCheck()
 				"Something is bad.", "ReSolution warning",
 				MB_OK | MB_ICONWARNING);
 		}
+		else
+		{
+			if (fopen_s(&fGame, GetPathUnderModuleA(NULL, GameFile, "Data\\current.thm"), "r") == ERROR_SUCCESS)
+			{
+				DWORD dwMapVer;
+				fread_s(&dwMapVer, 4, 4, 1, fGame);
+				if (dwMapVer < 3)
+				{
+					fseek(fGame, 0x14, SEEK_SET);
+					if ((borc = fgetc(fGame)) == 0)
+						Cavern = true;
+					fclose(fGame);
+				}
+			}
+			else if (fopen_s(&fGame, GetPathUnderModuleA(NULL, GameFile, "custom.dat"), "r") == ERROR_SUCCESS)
+			{
+
+				fseek(fGame, 0x10, SEEK_SET);
+				if ((borc = fgetc(fGame)) == 0)
+					Cavern = true;
+				fclose(fGame);
+			}
+		}
 		fclose(fLand);
 	}
 	else
@@ -66,120 +110,328 @@ BOOL CavernCheck()
 		"Your game will most likely crash.", "ReSolution warning",
 		MB_OK | MB_ICONWARNING);
 
-	return Cavern;
+	if (!WateredScreenHeight)
+	if (Cavern)
+		WateredScreenHeight = MapHeight + 158;
+	else
+		WateredScreenHeight = 2048 + MapHeight + 158;
 }
 
-BOOL GetW2WndSize(SHORT& sWidth, SHORT& sHeight)
+BOOL InGame()
+{
+	if (WWP)
+		return *pWWPInGame;
+	else
+		return TRUE;
+}
+
+LPDIRECTDRAW DDObj()
+{
+	if (WWP)
+		return *(LPDIRECTDRAW*)wwpDD;
+	else
+		return W2DS->lpDD;
+}
+
+HWND WormsWnd()
+{
+	if (WWP)
+	{
+		if (*pWormsWnd)
+			return *(HWND*)((DWORD)(*pWormsWnd) + 0x20);
+		else
+			return 0;
+	}
+	else
+		return *pWormsWnd;
+}
+
+HWND InputWnd()
+{
+	if (WWP)
+		return *pT17Wnd;
+	else
+		return *pWormsWnd;
+}
+
+LPLCOORD GCursPos()
+{
+	if (WWP)
+	{
+		if (*WWPCurPosStruct)
+			return (LPLCOORD)((DWORD)(*WWPCurPosStruct) + 0x3C);
+		else
+			return 0;
+	}
+	else
+		return W2PosCoord;
+}
+
+BOOL GetWndSize(HWND hWnd, DWORD& sWidth, DWORD& sHeight)
 {
 	BOOL result = 0;
-	if (IsWindow(W2Wnd))
+	if (IsWindow(hWnd))
 	{
-		RECT W2rect;
-		if (GetClientRect(W2Wnd, &W2rect))
+		RECT WRect;
+		if (GetClientRect(hWnd, &WRect))
 		{
-			sWidth = (SHORT)(W2rect.right - W2rect.left);
-			sHeight = (SHORT)(W2rect.bottom - W2rect.top);
+			sWidth = WRect.right - WRect.left;
+			sHeight = WRect.bottom - WRect.top;
 			result = 1;
 		}
 	}
 	return result;
 }
 
-void GetTargetScreenSize(SHORT nWidth, SHORT nHeight)
+void GetTargetScreenSize(DWORD nWidth, DWORD nHeight)
 {
 	if (Cavern)
 	{
-		TargetWidth  = nWidth > 1920 ? 1920 : nWidth;
-		TargetHeight = nHeight > 856 ? 856  : nHeight;
+		TargetWidth = nWidth > MapWidth - 4 ? MapWidth - 4 : nWidth;
+		TargetHeight = nHeight > WateredScreenHeight ? WateredScreenHeight : nHeight;
 	}
 	else
 	{
-		TargetWidth  = nWidth  > 6012 ? 6012 : nWidth;
-		TargetHeight = nHeight > 2902 ? 2902 : nHeight;
+		TargetWidth = nWidth > 4096 + MapWidth - 4 ? 4096 + MapWidth - 4 : nWidth;
+		TargetHeight = nHeight > WateredScreenHeight ? WateredScreenHeight : nHeight;
 	}
 }
 
-void GetAddresses()
+void PrepareAddresses()
 {
-	//credits for these go to S*natch and des; labels described by StepS
+	if (Version == WWP_11)
+	{
+		GlobalEatLimit = 768;
+		WWPDDinit = EXE.Offset(0x11CBF1);
+		WWPDDterm = EXE.Offset(0x10653C);
+		pWormsWnd = (HWND*)EXE.Offset(0x232D80);
+		pT17Wnd   = (HWND*)EXE.Offset(0x3F73C8);
+		wwpDD = (LPDIRECTDRAW2*)EXE.Offset(0x3F7354);
+		WWPCurPosStruct = (PVOID*)EXE.Offset(0x3F84C4);
+		pWWPInGame = (BOOL*)EXE.Offset(0x3F8DE8);
+	//	RenderGame = (PFVOID)PE.Offset(0x1051EF); //dont enable
 
-	LandWaterCriticalZone = 0x000279E9 + MemOffset(0xC00);
-	CavernWaterEatLimit   = 0x000279F6 + MemOffset(0xC00);
-	ActualHeight          = 0x0003328A + MemOffset(0xC00);
-	ActualWidth           = 0x00033292 + MemOffset(0xC00);
-	TopOffset             = 0x00045B38 + MemOffset(0xC00);
-	HorizontalSidesBox    = 0x00045B40 + MemOffset(0xC00);
-	LeftOffset            = 0x00045B4D + MemOffset(0xC00);
-	VerticalSidesBox      = 0x00045B55 + MemOffset(0xC00);
-	RenderFromTop         = 0x00045B73 + MemOffset(0xC00);
-	RenderFromLeft        = 0x00045B78 + MemOffset(0xC00);
+		PatchMemByte(EXE.Offset(0x26B9E), 0xEB); //always set the resolution below
+		PatchMemDword(EXE.Offset(0x26BB4), SWidth); //settings swidth
+		PatchMemDword(EXE.Offset(0x26BC1), SHeight); //settings sheight
+		PatchMemDword(EXE.Offset(0x10601D), 0x7FFF); //change max width limit to 32767
+		PatchMemDword(EXE.Offset(0x10603F), 0x7FFF); //change max height limit to 32767
 
-	AL_SWUnk1             = 0x00045A9C + MemOffset(0xC00);
-	AL_WUnk2              = 0x00045AB3 + MemOffset(0xC00);
-	AL_HorizontalSidesBox = 0x00045AD7 + MemOffset(0xC00);
-	AL_TopInfidelBox      = 0x00045ADC + MemOffset(0xC00);
-	AL_LeftOffset         = 0x00045B07 + MemOffset(0xC00);
-	AL_RenderFromTop      = 0x00045B18 + MemOffset(0xC00);
-	AL_RenderFromLeft     = 0x00045B1D + MemOffset(0xC00);
+		InsertJump((PVOID)EXE.Offset(0x123209), 6, &ProcessWWPWater, IJ_CALL); //WaterInit
+		InsertJump((PVOID)EXE.Offset(0x18BA16), 6, &ProcessWWPWater, IJ_CALL); //WaterLastInit
+		InsertJump((PVOID)EXE.Offset(0x18EF0B), 6, &ProcessWWPWater, IJ_CALL); //WaterRise
 
-	//	HUnk4             = 0x000363F6 + MemOffset(0xC00);
-	//	HUnk5             = 0x0004000C + MemOffset(0xC00);
+		InsertJump((PVOID)EXE.Offset(0x106537), 5, &ProcessDDStartup);
+	}
+	else if (Version == WWP_10)
+	{
+		GlobalEatLimit = 768;
+		WWPDDinit = EXE.Offset(0xFE751);
+		WWPDDterm = EXE.Offset(0xE809C);
+		pWormsWnd = (HWND*)EXE.Offset(0x2B4CB0);
+		pT17Wnd = (HWND*)EXE.Offset(0x47C7A8);
+		wwpDD = (LPDIRECTDRAW2*)EXE.Offset(0x47C734);
+		WWPCurPosStruct = (PVOID*)EXE.Offset(0x47DA40);
+		pWWPInGame = (BOOL*)EXE.Offset(0x199118);
 
-	//new things discovered by StepS
+		PatchMemByte(EXE.Offset(0x24954), 0xEB); //always set the resolution below
+		PatchMemDword(EXE.Offset(0x2496A), SWidth); //settings swidth
+		PatchMemDword(EXE.Offset(0x24977), SHeight); //settings sheight
+		PatchMemDword(EXE.Offset(0xE7B7D), 0x7FFF); //change max width limit to 32767
+		PatchMemDword(EXE.Offset(0xE7B9F), 0x7FFF); //change max height limit to 32767
 
-	CenterCursorX   = 0x00077878 + MemOffset(0x1C00);
-	CenterCursorY   = 0x0007787C + MemOffset(0x1C00);
+		InsertJump((PVOID)EXE.Offset(0x104D69), 6, &ProcessWWPWater, IJ_CALL); //WaterInit
+		InsertJump((PVOID)EXE.Offset(0x16D536), 6, &ProcessWWPWater, IJ_CALL); //WaterLastInit
+		InsertJump((PVOID)EXE.Offset(0x170A2B), 6, &ProcessWWPWater, IJ_CALL); //WaterRise
+		InsertJump((PVOID)EXE.Offset(0xE8097), 5, &ProcessDDStartup);
+	}
+	else //Worms 2
+	{
+		//credits for these go to S*natch's and des's patches; labels described by StepS
 
-	pW2Wnd          = (HWND*)MemOffset(0x8BCE8);
-	pW2DS           = (LPW2DDSTRUCT*)MemOffset(0x799C4);
-	RenderGame      = (PFVOID)MemOffset(0x34750);
+		LandWaterCriticalZone = EXE.Offset(0x279E7 + 0xC00);
+		CavernWaterEatLimit   = EXE.Offset(0x279F4 + 0xC00);
+		ActualHeight          = EXE.Offset(0x3328A + 0xC00);
+		ActualWidth           = EXE.Offset(0x33292 + 0xC00);
+		TopOffset             = EXE.Offset(0x45B36 + 0xC00);
+		HorizontalSidesBox    = EXE.Offset(0x45B40 + 0xC00);
+		LeftOffset            = EXE.Offset(0x45B4B + 0xC00);
+		VerticalSidesBox      = EXE.Offset(0x45B55 + 0xC00);
+		RenderFromTop         = EXE.Offset(0x45B71 + 0xC00);
+		RenderFromLeft        = EXE.Offset(0x45B76 + 0xC00);
+
+		AL_SWUnk1             = EXE.Offset(0x45A9A + 0xC00);
+		AL_WUnk2              = EXE.Offset(0x45AB1 + 0xC00);
+		AL_HorizontalSidesBox = EXE.Offset(0x45AD7 + 0xC00);
+		AL_TopInfidelBox      = EXE.Offset(0x45ADC + 0xC00);
+		AL_LeftOffset         = EXE.Offset(0x45B05 + 0xC00);
+		AL_RenderFromTop      = EXE.Offset(0x45B16 + 0xC00);
+		AL_RenderFromLeft     = EXE.Offset(0x45B1B + 0xC00);
+
+		//new things discovered by StepS
+
+		GlobalEatLimit = 480;
+		pWormsWnd       = (HWND*)EXE.Offset(0x8BCE8);
+		pW2DS           = (LPW2DDSTRUCT*)EXE.Offset(0x799C4);
+		RenderGame      = (PFVOID)EXE.Offset(0x34750);
+		W2PosCoord      = (LPLCOORD)EXE.Offset(0x79478);
+
+		InsertJump((PVOID)EXE.Offset(0x285FE), 9, &ProcessW2Waterrise, IJ_CALL); //WaterRise
+	}
 }
 
-void UnprotectAddresses()
-{
-	Unprotect(ActualWidth);
-	Unprotect(CavernWaterEatLimit);
-	Unprotect(TopOffset);
-}
-
-void PatchMem(SHORT nWidth, SHORT nHeight, bool bMouseForWindow)
+void PatchW2Mem(DWORD nWidth, DWORD nHeight, bool bMouseForWindow)
 {
 	GetTargetScreenSize(nWidth, nHeight);
 
-	*(PWORD)LandWaterCriticalZone = GlobalEatLimit;
-	*(PWORD)CavernWaterEatLimit   = GlobalEatLimit;
-	*(PWORD)ActualWidth           = nWidth;
-	*(PWORD)ActualHeight          = nHeight;
-	*(PWORD)RenderFromLeft        = TargetWidth;
-	*(PWORD)RenderFromTop         = TargetHeight;
-	*(PWORD)HorizontalSidesBox    = TargetWidth;
-	*(PWORD)VerticalSidesBox      = TargetHeight;
-	*(PWORD)LeftOffset            = TargetWidth / 2;
-	*(PWORD)TopOffset             = TargetHeight / 2;
+	PatchMemDword(LandWaterCriticalZone, GlobalEatLimit << 16); //in case other reso exepatches broke this value
+	PatchMemDword(CavernWaterEatLimit  , GlobalEatLimit << 16);
+	PatchMemDword(ActualWidth          , nWidth);
+	PatchMemDword(ActualHeight         , nHeight);
+	PatchMemDword(RenderFromLeft       , TargetWidth << 16);
+	PatchMemDword(RenderFromTop        , TargetHeight << 16);
+	PatchMemDword(HorizontalSidesBox   , TargetWidth);
+	PatchMemDword(VerticalSidesBox     , TargetHeight);
+	PatchMemDword(LeftOffset           , (TargetWidth / 2) << 16);
+	PatchMemDword(TopOffset            , (TargetHeight / 2) << 16);
 
-	*(PWORD)AL_WUnk2              = nWidth;
-	*(PWORD)AL_HorizontalSidesBox = TargetWidth;
-	*(PWORD)AL_RenderFromLeft     = TargetWidth;
-	*(PWORD)AL_TopInfidelBox      = TargetHeight;
-	*(PWORD)AL_RenderFromTop      = nHeight;
-	*(PWORD)AL_SWUnk1             = TargetWidth / 2;
-	*(PWORD)AL_LeftOffset         = TargetWidth / 2;
+	PatchMemDword(AL_WUnk2             , TargetWidth << 16);
+	PatchMemDword(AL_HorizontalSidesBox, TargetWidth);
+	PatchMemDword(AL_RenderFromLeft    , TargetWidth << 16);
+	PatchMemDword(AL_TopInfidelBox     , TargetHeight);
+	PatchMemDword(AL_RenderFromTop     , TargetHeight << 16);
+	PatchMemDword(AL_SWUnk1            , (TargetWidth / 2) << 16);
+	PatchMemDword(AL_LeftOffset        , (TargetWidth / 2) << 16);
 
-	if (bMouseForWindow && IsWindow(W2Wnd))
+	UpdateCenteredCursor(nWidth, nHeight, bMouseForWindow);
+}
+
+BOOL UpdateCenteredCursor(DWORD nWidth, DWORD nHeight, bool bMouseForWindow)
+{
+	if (GCursPos())
 	{
-		SHORT width, height;
-		GetW2WndSize(width, height);
+		ScreenCX = GetSystemMetrics(SM_CXSCREEN);
+		ScreenCY = GetSystemMetrics(SM_CYSCREEN);
 
-		*(PWORD)CenterCursorX = width / 2 > ScreenCX / 2 ? ScreenCX / 2 : width / 2;
-		*(PWORD)CenterCursorY = height / 2 > ScreenCY / 2 ? ScreenCY / 2 : height / 2;
+		if (bMouseForWindow && IsWindow(InputWnd()))
+		{
+			DWORD width, height;
+			GetWndSize(InputWnd(), width, height);
+
+			GCursPos()->X = width / 2 > ScreenCX / 2 ? ScreenCX / 2 : width / 2;
+			GCursPos()->Y = height / 2 > ScreenCY / 2 ? ScreenCY / 2 : height / 2;
+		}
+		else
+		{
+			GCursPos()->X = nWidth / 2 > ScreenCX / 2 ? ScreenCX / 2 : nWidth / 2;
+			GCursPos()->Y = nHeight / 2 > ScreenCY / 2 ? ScreenCY / 2 : nHeight / 2;
+		}
 	}
 	else
-	{
-		*(PWORD)CenterCursorX = nWidth / 2 > ScreenCX / 2 ? ScreenCX / 2 : nWidth / 2;
-		*(PWORD)CenterCursorY = nHeight / 2 > ScreenCY / 2 ? ScreenCY / 2 : nHeight / 2;
-	}
+		return FALSE;
+	return TRUE;
+}
 
-	//  *(PWORD)HUnk4 = nHeight;
-	//  *(PWORD)HUnk5 = nHeight;
-	//  unknown, readonly values
+void SetWWPRenderingDimensions(DWORD nWidth, DWORD nHeight, bool bMouseForWindow)
+{
+	if (WidthNow && HeightNow)
+	{
+		PatchMemDword(WidthNow, nWidth);
+		PatchMemDword(HeightNow, nHeight);
+		UpdateCenteredCursor(nWidth, nHeight, bMouseForWindow);
+	}
+}
+
+void AdjustWWPRenderer()
+{
+	GetTargetScreenSize(TWidth, THeight);
+	SetWWPRenderingDimensions(TargetWidth, TargetHeight);
+}
+
+__declspec(naked) void ProcessW2Waterrise()
+{
+	//eax: game's calculated spaceheight
+	__asm{
+		push ecx
+		push eax
+		push edx
+		mov edx, [ecx+27Ch]
+		add edx, 0A0h
+		shl edx, 10h
+		sub edx, [ecx+9DC8h]
+		cmp edx, [GlobalEatLimit]
+		jge NotFinalBox
+		sub eax, [ecx+9DC0h] //Fix the (usually 2) pixel addition to the final camera height
+		jmp NoJitter
+	NotFinalBox:
+		mov edx, [ecx+27Ch]
+		shl edx, 10h
+		cmp edx, [esi+84h] //Water will rise until [esi+84h >> 16]
+		jg NoJitter
+		sub eax, 20000h //-2 Delta: TEST to mitigate a very short left-right jitter; may be improved later
+	NoJitter:
+		sar eax, 10h
+		cmp eax, [WateredScreenHeight]
+		je JumpOut
+		mov [WateredScreenHeight], eax
+		push 0
+		push [THeight]
+		push [TWidth]
+		call PatchW2Mem
+		add esp, 0Ch
+		call CleanupSurfaces
+	JumpOut:
+		pop edx
+		pop eax
+		pop ecx
+		mov eax, [esi + 74h]
+		mov ecx, [eax + 9DCCh]
+		ret
+	}
+}
+
+__declspec(naked) void ProcessWWPWater()
+{
+	//ecx: game's calculated spaceheight
+	__asm{
+		push ecx
+		cmp ecx, 300h
+		jge AtLeast300
+		mov ecx, 300h
+	AtLeast300:
+		cmp ecx, [WateredScreenHeight]
+		je JumpOut
+		mov [WateredScreenHeight], ecx
+		push eax
+		push edx
+		call AdjustWWPRenderer
+		call CleanupSurfaces
+		pop edx
+		pop eax
+	JumpOut:
+		pop ecx
+		cmp ecx, 300h
+		ret
+	}
+}
+
+
+__declspec(naked) void ProcessDDStartup()
+{
+	__asm{
+		mov [WidthNow], ecx
+		mov [HeightNow], ecx
+		add [WidthNow], 3568h
+		add [HeightNow], 356Ch
+		call WWPDDinit
+		push eax
+		push ecx
+		push edx
+		call CavernCheck
+		call AdjustWWPRenderer
+		pop edx
+		pop ecx
+		pop eax
+		jmp WWPDDterm
+	}
 }

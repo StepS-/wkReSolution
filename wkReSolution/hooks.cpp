@@ -6,7 +6,7 @@
 HHOOK wHook, kHook, mHook;
 BOOL ModifiedSurfaces;
 
-SHORT TWidth, THeight, LastWidth, LastHeight;
+DWORD TWidth, THeight, LastWidth, LastHeight;
 DOUBLE DTWidth, DTHeight, DDif;
 
 BOOL DZoom(DOUBLE& dCX, DOUBLE& dCY, DOUBLE dDif, SHORT sDelta)
@@ -29,8 +29,8 @@ BOOL ReNormalizeBuffers()
 {
 	BOOL result = 0;
 
-	SHORT width, height;
-	GetW2WndSize(width, height);
+	DWORD width, height;
+	GetWndSize(WormsWnd(), width, height);
 
 	if (HandleBufferResize(width, height))
 	{
@@ -43,25 +43,59 @@ BOOL ReNormalizeBuffers()
 	return result;
 }
 
-BOOL HandleBufferResize(SHORT nWidth, SHORT nHeight, bool bRedraw)
+BOOL CleanupSurfaces()
 {
 	BOOL result = 0;
 
-	if (DDObj && nWidth > 0 && nHeight > 0)
+	if (DDObj())
+	{
+		DDSURFACEDESC prefDesc;
+		prefDesc.dwSize = sizeof(DDSURFACEDESC);
+		prefDesc.dwFlags = DDSD_CAPS;
+		prefDesc.ddsCaps.dwCaps = 0x8A00;
+		if (SUCCEEDED(DDObj()->EnumSurfaces(DDENUMSURFACES_DOESEXIST | DDENUMSURFACES_NOMATCH, &prefDesc, NULL, EnumResize)))
+			result = TRUE;
+	}
+	return result;
+}
+
+BOOL HandleBufferResize(DWORD nWidth, DWORD nHeight, bool bRedraw)
+{
+	BOOL result = 0;
+
+	if (DDObj() && nWidth <= 32767 && nHeight <= 32767 && nWidth && nHeight)
 	{
 		TWidth = nWidth;
 		THeight = nHeight;
 		ModifiedSurfaces = 0;
+		DDSURFACEDESC prefDesc;
+		prefDesc.dwSize = sizeof(DDSURFACEDESC);
+		prefDesc.dwFlags = DDSD_CAPS;
+		prefDesc.ddsCaps.dwCaps = 0x8A00;
 		if (LastWidth != TWidth || LastHeight != THeight)
-		if (SUCCEEDED(DDObj->EnumSurfaces(DDENUMSURFACES_DOESEXIST | DDENUMSURFACES_ALL, NULL, NULL, EnumResize)))
+		if (SUCCEEDED(DDObj()->EnumSurfaces(DDENUMSURFACES_DOESEXIST | DDENUMSURFACES_NOMATCH, &prefDesc, NULL, EnumResize)))
 		{
 			LastWidth = TWidth;
 			LastHeight = THeight;
-			PatchMem(TWidth, THeight, true);
-			W2DS->RenderWidth = TargetWidth;
-			W2DS->RenderHeight = TargetHeight;
-			if (ModifiedSurfaces && (ProgressiveResize || bRedraw))
-				RenderGame(); //Experimental: rerender the scene right after resizing
+			if (WWP)
+			{
+				if (IsWindow(T17Wnd))
+				{
+					RECT WWPRect;
+					if (GetClientRect(WormsWnd(), &WWPRect))
+						SetWindowPos(T17Wnd, NULL, 0, 0, WWPRect.right, WWPRect.bottom, SWP_NOMOVE | SWP_NOZORDER);
+				}
+				GetTargetScreenSize(TWidth, THeight);
+				SetWWPRenderingDimensions(TargetWidth, TargetHeight, true);
+			}
+			else
+			{
+				PatchW2Mem(TWidth, THeight, true);
+				W2DS->RenderWidth = TargetWidth;
+				W2DS->RenderHeight = TargetHeight;
+				if (ModifiedSurfaces && (ProgressiveResize || bRedraw))
+					RenderGame(); //Experimental: rerender the scene right after resizing
+			}
 			result = 1;
 		}
 	}
@@ -70,16 +104,16 @@ BOOL HandleBufferResize(SHORT nWidth, SHORT nHeight, bool bRedraw)
 }
 
 //HACK
-HRESULT WINAPI EnumResize(LPDIRECTDRAWSURFACE pSurface, LPDDSURFACEDESC lpSurfaceDesc, LPVOID lpContext)
+HRESULT WINAPI EnumResize(LPDIRECTDRAWSURFACE pSurface, LPDDSURFACEDESC lpSurfaceDesc, LPVOID)
 {
-	BOOL bRequiredSurface  = (!!!(lpSurfaceDesc->dwFlags & DDSD_CKSRCBLT) && lpSurfaceDesc->dwWidth == LastWidth && lpSurfaceDesc->dwHeight == LastHeight);
-	BOOL bPrimary          = ( !!(lpSurfaceDesc->ddsCaps.dwCaps & DDSCAPS_PRIMARYSURFACE));
+	BOOL bRequiredSurface = (!!!(lpSurfaceDesc->dwFlags & DDSD_CKSRCBLT) && lpSurfaceDesc->dwWidth == LastWidth && lpSurfaceDesc->dwHeight == LastHeight);
+	BOOL bPrimary          = (!!(lpSurfaceDesc->ddsCaps.dwCaps & DDSCAPS_PRIMARYSURFACE));
 
 	if (bRequiredSurface && !bPrimary)
 	{
 		LONG lsz  = sizeof(LONG);
 		LONG lmod = 8;
-		if (lpSurfaceDesc->lPitch != RoundUp(lpSurfaceDesc->dwWidth, 8))
+		if ((DWORD)lpSurfaceDesc->lPitch != RoundUp(lpSurfaceDesc->dwWidth, 8))
 			lmod  = 2;
 
 		DWORD   dwSurfPtr    = *(PDWORD)((DWORD)pSurface + lsz);
@@ -100,42 +134,93 @@ HRESULT WINAPI EnumResize(LPDIRECTDRAWSURFACE pSurface, LPDDSURFACEDESC lpSurfac
 
 		HLOCAL MemAlloc = LocalHandle((LPCVOID)(*lpSurfMemAddr - lsz * 2));
 
-		if (MemAlloc = LocalReAlloc(MemAlloc, dwNewMemSize + lsz * 2, LMEM_MOVEABLE))
+		if ((MemAlloc = LocalReAlloc(MemAlloc, dwNewMemSize + lsz * 2, LMEM_MOVEABLE)) != 0)
 		{
 			PVOID NewMemPtr = LocalLock(MemAlloc);
-			*lpSurfMemSize  = dwNewMemSize;
-			*lpSurfMemAddr  = (DWORD)NewMemPtr + lsz * 2;
-			*lpDataWidth    = TWidth;
-			*lpDataPitch    = dwNewPitch;
-			*lpInfoWidth    = TWidth;
-			*lpInfoPitch    = dwNewPitch;
-			*lpInfoMemAddr  = *lpSurfMemAddr;
+			if (NewMemPtr)
+			{
+				__try {
+					*lpSurfMemSize = dwNewMemSize;
+					*lpSurfMemAddr = (DWORD)NewMemPtr + lsz * 2;
+					*lpDataWidth = LOWORD(TWidth);
+					*lpDataPitch = dwNewPitch;
+					*lpInfoWidth = TWidth;
+					*lpInfoPitch = dwNewPitch;
+					*lpInfoMemAddr = *lpSurfMemAddr;
 
-			*lpDataHeight = THeight;
-			*lpInfoHeight = THeight;
+					*lpDataHeight = LOWORD(THeight);
+					*lpInfoHeight = THeight;
 
-			//cleanup
-			memset((PVOID)(*lpSurfMemAddr), 0, dwNewMemSize);
+					//cleanup
+					memset((PVOID)(*lpSurfMemAddr), 0, dwNewMemSize);
 
-			ModifiedSurfaces++;
-			LocalUnlock(MemAlloc);
+					ModifiedSurfaces++;
+				}
+				__finally {
+					LocalUnlock(MemAlloc);
+				}
+			}
 		}
 	}
 	return DDENUMRET_OK;
 }
 
+HRESULT WINAPI EnumCleanup(LPDIRECTDRAWSURFACE pSurface, LPDDSURFACEDESC lpSurfaceDesc, LPVOID)
+{
+	BOOL bRequiredSurface = (!!!(lpSurfaceDesc->dwFlags & DDSD_CKSRCBLT) && lpSurfaceDesc->dwWidth == LastWidth && lpSurfaceDesc->dwHeight == LastHeight);
+	BOOL bPrimary = (!!(lpSurfaceDesc->ddsCaps.dwCaps & DDSCAPS_PRIMARYSURFACE));
+
+	if (bRequiredSurface && !bPrimary)
+	{
+		DWORD  dwSurfPtr = *(PDWORD)((DWORD)pSurface + sizeof(LONG));
+		DWORD  dwDataPtr = *(PDWORD)dwSurfPtr;
+		PDWORD lpSurfMemSize = (PDWORD)(dwDataPtr + 0x10);
+		PDWORD lpSurfMemAddr = (PDWORD)(dwDataPtr + 0xA8);
+
+		HLOCAL MemAlloc = LocalHandle((LPCVOID)(*lpSurfMemAddr - sizeof(LONG)* 2));
+		if (LocalLock(MemAlloc))
+		{
+			__try{
+				memset((PVOID)(*lpSurfMemAddr), 0, *lpSurfMemSize);
+			}
+			__finally{
+				LocalUnlock(MemAlloc);
+			}
+		}
+	}
+}
+
+BOOL WheelZoom(SHORT sDelta)
+{
+	if (sDelta != 0)
+	{
+		if (DZoom(DTWidth, DTHeight, DDif, -sDelta))
+			return HandleBufferResize((DWORD)DTWidth, (DWORD)DTHeight);
+	}
+	return 0;
+}
+
 LRESULT CALLBACK CallWndProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
-	if (nCode == HC_ACTION)
+	if (nCode == HC_ACTION && InGame())
 	{
 		CWPSTRUCT* pwp = (CWPSTRUCT*)lParam;
 		if (pwp->message == WM_WINDOWPOSCHANGED)
 		{
-			if (pwp->hwnd == W2Wnd)
+			if (pwp->hwnd == WormsWnd())
 			{
 				LPWINDOWPOS lwp = (LPWINDOWPOS)(pwp->lParam);
 				if (!!!(lwp->flags & SWP_NOSIZE) && !!!(lwp->flags & SWP_NOCOPYBITS) && !!!(lwp->flags & SWP_NOSENDCHANGING))
+				{
 					ReNormalizeBuffers();
+				}
+			}
+		}
+		else if (pwp->message == WM_MOUSEWHEEL && UseTouchscreenZoom)
+		{
+			if (!!(pwp->wParam & MK_CONTROL))
+			{
+				WheelZoom(GET_WHEEL_DELTA_WPARAM(pwp->wParam));
 			}
 		}
 	}
@@ -145,17 +230,12 @@ LRESULT CALLBACK CallWndProc(int nCode, WPARAM wParam, LPARAM lParam)
 
 LRESULT CALLBACK MouseProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
-	if (nCode == HC_ACTION)
+	if (nCode == HC_ACTION && InGame())
 	{
 		if (wParam == WM_MOUSEWHEEL)
 		{
 			LPMOUSEHOOKSTRUCTEX lpWheelInf = (LPMOUSEHOOKSTRUCTEX)lParam;
-			SHORT sDelta = HIWORD(lpWheelInf->mouseData);
-			if (sDelta != 0)
-			{
-				if (DZoom(DTWidth, DTHeight, DDif, -sDelta))
-					HandleBufferResize((SHORT)DTWidth, (SHORT)DTHeight);
-			}
+			WheelZoom(GET_WHEEL_DELTA_WPARAM(lpWheelInf->mouseData));
 		}
 		else if (wParam == WM_MBUTTONDOWN)
 		{
@@ -167,9 +247,7 @@ LRESULT CALLBACK MouseProc(int nCode, WPARAM wParam, LPARAM lParam)
 
 LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
-	PBYTE kstate = 0;
-
-	if (HC_ACTION == nCode)
+	if (nCode == HC_ACTION && InGame())
 	{
 		if (!!!(lParam & INT_MIN)) //key is in a held state
 		{
@@ -178,17 +256,17 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
 				if (wParam == 109) // Num -
 				{
 					do if (DZoom(DTWidth, DTHeight, DDif, 8))
-						HandleBufferResize((SHORT)DTWidth, (SHORT)DTHeight, true);
+						HandleBufferResize((SHORT)DTWidth, (SHORT)DTHeight);
 					else break;
-					while (KeyPressed(109));
+					while (ProgressiveResize && KeyPressed(109));
 				}
 
 				else if (wParam == 107) // Num +
 				{
 					do if (DZoom(DTWidth, DTHeight, DDif, -8))
-						HandleBufferResize((SHORT)DTWidth, (SHORT)DTHeight, true);
+						HandleBufferResize((SHORT)DTWidth, (SHORT)DTHeight);
 					else break;
-					while (KeyPressed(107));
+					while (ProgressiveResize && KeyPressed(107));
 				}
 
 				else if (wParam == VK_END) // End
@@ -201,18 +279,18 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
 			{
 				if (wParam == VK_RETURN)
 				{
-					if (!!(lParam & 0x20000000) && DDObj) //Alt is pressed and DD is there
+					if (!!(lParam & 0x20000000) && DDObj()) //Alt is pressed and DD is there
 					{
-						SHORT width, height;
-						GetW2WndSize(width, height);
+						DWORD width, height;
+						GetWndSize(WormsWnd(), width, height);
 
 						if (width >= ScreenCX && height >= ScreenCY)
-							DDObj->SetDisplayMode(AeWidth, AeHeight, 0);
+							DDObj()->SetDisplayMode(AeWidth, AeHeight, 0);
 						else
 						{
 							AeWidth = width;
 							AeHeight = height;
-							DDObj->SetDisplayMode(ScreenCX, ScreenCY, 0);
+							DDObj()->SetDisplayMode(ScreenCX, ScreenCY, 0);
 						}
 
 						ReNormalizeBuffers();
@@ -235,6 +313,7 @@ void InstallHooks()
 		}
 		if (AllowZoom)
 		{
+			if (UseTouchscreenZoom && !wHook) wHook = SetWindowsHookEx(WH_CALLWNDPROC, (HOOKPROC)CallWndProc, 0, GetCurrentThreadId());
 			if (UseKeyboardZoom && !kHook) kHook = SetWindowsHookEx(WH_KEYBOARD, (HOOKPROC)KeyboardProc, 0, GetCurrentThreadId());
 			if (UseMouseWheel   && !mHook) mHook = SetWindowsHookEx(WH_MOUSE, (HOOKPROC)MouseProc, 0, GetCurrentThreadId());
 		}
