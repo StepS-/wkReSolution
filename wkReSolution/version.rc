@@ -1,7 +1,7 @@
 
 1 VERSIONINFO
- FILEVERSION 0,4,0,0
- PRODUCTVERSION 0,4,0,0
+ FILEVERSION 0,4,0,1
+ PRODUCTVERSION 0,4,0,1
  FILEOS 0x4L
  FILETYPE 0x2L
 BEGIN
@@ -11,12 +11,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "StepS"
             VALUE "FileDescription", "Allows to change screen resolution to any value in WWP and Worms 2 and zoom/resize the window in windowed mode."
-            VALUE "FileVersion", "0.4.0.0"
+            VALUE "FileVersion", "0.4.0.1"
             VALUE "InternalName", "ReSolution HD"
             VALUE "LegalCopyright", "(C) 2014, StepS"
             VALUE "OriginalFilename", "wkReSolution.dll"
             VALUE "ProductName", "ReSolution"
-            VALUE "ProductVersion", "0.4.0.0"
+            VALUE "ProductVersion", "0.4.0.1"
         END
     END
     BLOCK "VarFileInfo"

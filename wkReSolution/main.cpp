@@ -50,14 +50,7 @@ void LoadConfig()
 	if (UseKeyboardZoom < 0)
 		WritePrivateProfileIntA("Zooming", "UseKeyboardZoom", UseKeyboardZoom = 1, Config);
 
-	TargetWidth = SWidth;  TargetHeight = SHeight;
-	LastWidth   = SWidth;  LastHeight   = SHeight;
-	TWidth      = SWidth;  THeight      = SHeight;
-	DTWidth     = SWidth;  DTHeight     = SHeight;
-	DDif = DTHeight / DTWidth;
-
-	AeWidth  = (DWORD)(DTWidth / 1.5);
-	AeHeight = (DWORD)(DTHeight / 1.5);
+	InitializeScreenSize();
 }
 
 BOOL APIENTRY DllMain(HMODULE, DWORD dwReason, LPVOID)

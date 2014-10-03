@@ -19,7 +19,6 @@ DWORD SWidth, SHeight, TargetWidth, TargetHeight;
 DWORD ScreenCX, ScreenCY, AeWidth, AeHeight;
 DWORD GlobalEatLimit;
 
-BOOL OfflineCavernFloodFix;
 BOOL AllowResize, ProgressiveResize, AltEnter;
 BOOL AllowZoom, UseKeyboardZoom, UseMouseWheel, UseTouchscreenZoom;
 DWORD ActualWidth, HorizontalSidesBox, RenderFromLeft;
@@ -30,6 +29,7 @@ DWORD TopOffset;
 
 DWORD WidthNow, HeightNow;
 DWORD WWPDDinit, WWPDDterm;
+DWORD WWPGameEndCont;
 LPDIRECTDRAW2* wwpDD;
 HWND* pT17Wnd;
 BOOL* pWWPInGame;
@@ -204,6 +204,7 @@ void PrepareAddresses()
 		GlobalEatLimit = 768;
 		WWPDDinit = EXE.Offset(0x11CBF1);
 		WWPDDterm = EXE.Offset(0x10653C);
+		WWPGameEndCont = EXE.Offset(0x105308);
 		pWormsWnd = (HWND*)EXE.Offset(0x232D80);
 		pT17Wnd   = (HWND*)EXE.Offset(0x3F73C8);
 		wwpDD = (LPDIRECTDRAW2*)EXE.Offset(0x3F7354);
@@ -221,6 +222,7 @@ void PrepareAddresses()
 		InsertJump((PVOID)EXE.Offset(0x18BA16), 6, &ProcessWWPWater, IJ_CALL); //WaterLastInit
 		InsertJump((PVOID)EXE.Offset(0x18EF0B), 6, &ProcessWWPWater, IJ_CALL); //WaterRise
 
+		InsertJump((PVOID)EXE.Offset(0x105302), 6, &ProcessWWPGameEnd);
 		InsertJump((PVOID)EXE.Offset(0x106537), 5, &ProcessDDStartup);
 	}
 	else if (Version == WWP_10)
@@ -228,6 +230,7 @@ void PrepareAddresses()
 		GlobalEatLimit = 768;
 		WWPDDinit = EXE.Offset(0xFE751);
 		WWPDDterm = EXE.Offset(0xE809C);
+		WWPGameEndCont = EXE.Offset(0xE6E68);
 		pWormsWnd = (HWND*)EXE.Offset(0x2B4CB0);
 		pT17Wnd = (HWND*)EXE.Offset(0x47C7A8);
 		wwpDD = (LPDIRECTDRAW2*)EXE.Offset(0x47C734);
@@ -243,6 +246,8 @@ void PrepareAddresses()
 		InsertJump((PVOID)EXE.Offset(0x104D69), 6, &ProcessWWPWater, IJ_CALL); //WaterInit
 		InsertJump((PVOID)EXE.Offset(0x16D536), 6, &ProcessWWPWater, IJ_CALL); //WaterLastInit
 		InsertJump((PVOID)EXE.Offset(0x170A2B), 6, &ProcessWWPWater, IJ_CALL); //WaterRise
+
+		InsertJump((PVOID)EXE.Offset(0xE6E62), 6, &ProcessWWPGameEnd);
 		InsertJump((PVOID)EXE.Offset(0xE8097), 5, &ProcessDDStartup);
 	}
 	else //Worms 2
@@ -434,4 +439,36 @@ __declspec(naked) void ProcessDDStartup()
 		pop eax
 		jmp WWPDDterm
 	}
+}
+
+__declspec(naked) void ProcessWWPGameEnd()
+{
+	__asm{
+		push eax
+		push ecx
+		push edx
+		call InitializeScreenSize
+		pop edx
+		pop ecx
+		pop eax
+		push ebp
+		mov ebp, esp
+		sub esp, 0Ch
+		jmp WWPGameEndCont
+	}
+}
+
+void InitializeScreenSize()
+{
+	WidthNow = 0;
+	HeightNow = 0;
+
+	TargetWidth = SWidth;  TargetHeight = SHeight;
+	LastWidth   = SWidth;  LastHeight   = SHeight;
+	TWidth      = SWidth;  THeight      = SHeight;
+	DTWidth     = SWidth;  DTHeight     = SHeight;
+	DDif = DTHeight / DTWidth;
+
+	AeWidth  = (DWORD)(DTWidth / 1.5);
+	AeHeight = (DWORD)(DTHeight / 1.5);
 }
